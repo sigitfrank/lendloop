@@ -13,12 +13,16 @@ const NAV_LINKS = [
   { href: "/my/listings", label: "My listings" },
   { href: "/my/requests", label: "My requests" },
   { href: "/my/incoming", label: "Incoming" },
-] as const;
+];
+const ADMIN_LINK = { href: "/admin", label: "Admin" };
 
 export function SiteHeader() {
   const pathname = usePathname();
   const { isAuthenticated } = useConvexAuth();
   const pendingIncoming = useQuery(api.loans.incomingPendingCount, isAuthenticated ? {} : "skip");
+  const me = useQuery(api.users.current, isAuthenticated ? {} : "skip");
+  // Showing the link is cosmetic; /admin and every admin function check the role server-side.
+  const links = me?.role === "admin" ? [...NAV_LINKS, ADMIN_LINK] : NAV_LINKS;
 
   return (
     <header className="border-b bg-card">
@@ -29,7 +33,7 @@ export function SiteHeader() {
         <Suspense>
           <Show when="signed-in">
             <nav aria-label="Main" className="flex flex-1 items-center gap-1 overflow-x-auto">
-              {NAV_LINKS.map((link) => {
+              {links.map((link) => {
                 const active = pathname.startsWith(link.href);
                 const badge = link.href === "/my/incoming" ? pendingIncoming : undefined;
                 return (

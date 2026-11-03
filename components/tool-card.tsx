@@ -9,9 +9,12 @@ export type ToolCardData = FunctionReturnType<typeof api.tools.list>["page"][num
 
 export function ToolCard({
   tool,
+  showLender = true,
   actions,
 }: {
   tool: ToolCardData;
+  /** Show who lends it. Off on My listings, where every card is the viewer's. */
+  showLender?: boolean;
   actions?: React.ReactNode;
 }) {
   return (
@@ -28,10 +31,12 @@ export function ToolCard({
         {tool.description && (
           <p className="line-clamp-3 text-sm text-muted-foreground">{tool.description}</p>
         )}
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span>{tool.isOwn ? "Your listing" : `Lent by ${tool.owner.firstName}`}</span>
-          {tool.owner.trustedLender && <TrustedLenderBadge />}
-        </div>
+        {showLender && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span>{tool.isOwn ? "Your listing" : `Lent by ${tool.owner.firstName}`}</span>
+            {tool.owner.trustedLender && <TrustedLenderBadge />}
+          </div>
+        )}
       </CardContent>
       {actions && <CardFooter className="justify-end gap-1">{actions}</CardFooter>}
     </Card>

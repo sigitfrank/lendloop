@@ -18,7 +18,11 @@ export default defineSchema({
     trustedLender: v.boolean(),
   })
     .index("by_tokenIdentifier", ["tokenIdentifier"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    // Admin user list: filter by role / trusted, search by name.
+    .index("by_role", ["role"])
+    .index("by_trustedLender", ["trustedLender"])
+    .searchIndex("search_name", { searchField: "name", filterFields: ["role", "trustedLender"] }),
 
   tools: defineTable({
     ownerId: v.id("users"),
@@ -72,7 +76,11 @@ export default defineSchema({
     .index("by_borrowerId_and_startDate", ["borrowerId", "startDate"])
     .index("by_borrowerId_and_status", ["borrowerId", "status"])
     .index("by_borrowerId_and_status_and_startDate", ["borrowerId", "status", "startDate"])
-    // Overdue reminders (n8n): approved loans whose endDate has passed.
+    // Admin "all loans" (creation order uses the built-in index).
+    .index("by_startDate", ["startDate"])
+    .index("by_status", ["status"])
+    .index("by_status_and_startDate", ["status", "startDate"])
+    // Overdue: approved loans whose endDate has passed (admin view, n8n reminders).
     .index("by_status_and_endDate", ["status", "endDate"])
     .searchIndex("search_text", {
       searchField: "searchText",

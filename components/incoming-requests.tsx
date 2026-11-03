@@ -51,7 +51,7 @@ function OwnerActions({ loan }: { loan: LoanView }) {
   const respond = useMutation(api.loans.respond);
   const markReturned = useMutation(api.loans.markReturned);
   const [approving, setApproving] = useState(false);
-  const borrower = loan.otherParty.firstName;
+  const borrower = loan.borrower.firstName;
 
   async function approve() {
     setApproving(true);

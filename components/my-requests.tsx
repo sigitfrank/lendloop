@@ -51,7 +51,7 @@ export function MyRequests({ params }: { params: LoanListParams }) {
           <ConfirmAction
             trigger={<IconButton icon={X} label="Cancel request" tone="danger" />}
             title={`Cancel your request for “${loan.tool.name}”?`}
-            description={`${loan.otherParty.firstName} won't be able to approve it any more.`}
+            description={`${loan.lender.firstName} won't be able to approve it any more.`}
             confirmLabel="Cancel request"
             cancelLabel="Keep request"
             destructive

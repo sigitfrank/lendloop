@@ -26,7 +26,8 @@ import type { ViewMode } from "@/lib/list-params";
 import { timeAgo } from "@/lib/time";
 
 export type LoanView = FunctionReturnType<typeof api.loans.mine>["page"][number];
-type Side = "borrower" | "owner";
+/** Whose list this is: decides which person is shown (admin sees both). */
+type Side = "borrower" | "owner" | "admin";
 type RenderActions = (loan: LoanView) => React.ReactNode;
 
 export const LOAN_PAGE_SIZE = 12;
@@ -52,7 +53,8 @@ export function LoanList({
   side: Side;
   view: ViewMode;
   empty: React.ReactNode;
-  renderActions: RenderActions;
+  /** Omit for read-only lists (admin). */
+  renderActions?: RenderActions;
 }) {
   if (query.status === "LoadingFirstPage") return <LoanGridSkeleton />;
   if (query.results.length === 0) return <>{empty}</>;
@@ -67,7 +69,7 @@ export function LoanList({
 type BodyProps = {
   query: UsePaginatedQueryReturnType<typeof api.loans.mine>;
   side: Side;
-  renderActions: RenderActions;
+  renderActions?: RenderActions;
 };
 
 function InfiniteLoanGrid({ query, side, renderActions }: BodyProps) {
@@ -103,10 +105,10 @@ function PagedLoanTable({ query, side, renderActions }: BodyProps) {
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
                   <TableHead className="pl-4">Tool</TableHead>
                   <TableHead>Dates</TableHead>
-                  <TableHead>{side === "borrower" ? "Lender" : "Borrower"}</TableHead>
+                  <TableHead>{PEOPLE_HEADING[side]}</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last update</TableHead>
-                  <TableHead className="pr-4 text-right">Actions</TableHead>
+                  {renderActions && <TableHead className="pr-4 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -118,7 +120,7 @@ function PagedLoanTable({ query, side, renderActions }: BodyProps) {
                     </TableCell>
                     <TableCell>{dateRange(loan)}</TableCell>
                     <TableCell>
-                      <OtherParty loan={loan} side={side} />
+                      <People loan={loan} side={side} />
                     </TableCell>
                     <TableCell>
                       <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
@@ -126,9 +128,11 @@ function PagedLoanTable({ query, side, renderActions }: BodyProps) {
                     <TableCell className="text-muted-foreground">
                       {lastUpdate(loan, now)}
                     </TableCell>
-                    <TableCell className="pr-4">
-                      <div className="flex justify-end gap-1">{renderActions(loan)}</div>
-                    </TableCell>
+                    {renderActions && (
+                      <TableCell className="pr-4">
+                        <div className="flex justify-end gap-1">{renderActions(loan)}</div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -147,7 +151,7 @@ function LoanCardGrid({ loans, side, renderActions }: { loans: LoanView[] } & Om
   return (
     <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {loans.map((loan) => {
-        const actions = renderActions(loan);
+        const actions = renderActions?.(loan);
         return (
           <li key={loan._id}>
             <Card className="h-full">
@@ -163,7 +167,7 @@ function LoanCardGrid({ loans, side, renderActions }: { loans: LoanView[] } & Om
                   <CalendarDays className="size-4 text-muted-foreground" aria-hidden />
                   {dateRange(loan)}
                 </div>
-                <OtherParty loan={loan} side={side} withPrefix />
+                <People loan={loan} side={side} withPrefix />
                 <p className="text-xs text-muted-foreground">{lastUpdate(loan, now)}</p>
               </CardContent>
               {actions && <CardFooter className="justify-end gap-1">{actions}</CardFooter>}
@@ -175,12 +179,25 @@ function LoanCardGrid({ loans, side, renderActions }: { loans: LoanView[] } & Om
   );
 }
 
-function OtherParty({ loan, side, withPrefix }: { loan: LoanView; side: Side; withPrefix?: boolean }) {
-  const name = loan.otherParty.firstName;
+const PEOPLE_HEADING: Record<Side, string> = {
+  borrower: "Lender",
+  owner: "Borrower",
+  admin: "Lender → Borrower",
+};
+
+/** The person (or, for admins, both people) relevant to this list. */
+function People({ loan, side, withPrefix }: { loan: LoanView; side: Side; withPrefix?: boolean }) {
+  const lender = loan.lender.firstName;
+  const borrower = loan.borrower.firstName;
+  let text: string;
+  if (side === "admin") text = `${lender} → ${borrower}`;
+  else if (side === "borrower") text = withPrefix ? `Lent by ${lender}` : lender;
+  else text = withPrefix ? `Requested by ${borrower}` : borrower;
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span>{withPrefix ? (side === "borrower" ? `Lent by ${name}` : `Requested by ${name}`) : name}</span>
-      {side === "borrower" && loan.otherParty.trustedLender && <TrustedLenderBadge />}
+      <span>{text}</span>
+      {side !== "owner" && loan.lender.trustedLender && <TrustedLenderBadge />}
     </div>
   );
 }

@@ -8,9 +8,11 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_availability from "../lib/availability.js";
 import type * as lib_dates from "../lib/dates.js";
+import type * as lib_loanViews from "../lib/loanViews.js";
 import type * as lib_search from "../lib/search.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as loans from "../loans.js";
@@ -24,9 +26,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   "lib/auth": typeof lib_auth;
   "lib/availability": typeof lib_availability;
   "lib/dates": typeof lib_dates;
+  "lib/loanViews": typeof lib_loanViews;
   "lib/search": typeof lib_search;
   "lib/validators": typeof lib_validators;
   loans: typeof loans;

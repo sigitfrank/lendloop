@@ -31,35 +31,41 @@ export function ToolResults({ query, view, showLender, empty, renderActions }: P
   return view === "table" ? (
     <PagedTable query={query} showLender={showLender} renderActions={renderActions} />
   ) : (
-    <InfiniteGrid query={query} renderActions={renderActions} />
+    <InfiniteGrid query={query} showLender={showLender} renderActions={renderActions} />
   );
 }
 
 function CardGrid({
   tools,
+  showLender,
   renderActions,
 }: {
   tools: ToolCardData[];
+  showLender: boolean;
   renderActions?: Props["renderActions"];
 }) {
   return (
     <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {tools.map((tool) => (
         <li key={tool._id}>
-          <ToolCard tool={tool} actions={renderActions?.(tool)} />
+          <ToolCard tool={tool} showLender={showLender} actions={renderActions?.(tool)} />
         </li>
       ))}
     </ul>
   );
 }
 
-function InfiniteGrid({ query, renderActions }: Pick<Props, "query" | "renderActions">) {
+function InfiniteGrid({
+  query,
+  showLender,
+  renderActions,
+}: Pick<Props, "query" | "showLender" | "renderActions">) {
   const { results, status, loadMore } = query;
   const sentinel = useInfiniteScroll(status, loadMore, PAGE_SIZE);
 
   return (
     <div className="space-y-6">
-      <CardGrid tools={results} renderActions={renderActions} />
+      <CardGrid tools={results} showLender={showLender} renderActions={renderActions} />
       <div ref={sentinel} aria-hidden />
       {status === "LoadingMore" && <ToolGridSkeleton count={3} />}
       <p className="text-center text-xs text-muted-foreground" aria-live="polite">
@@ -80,7 +86,7 @@ function PagedTable({
     <div className="space-y-4">
       {/* Phones: the table collapses to cards. */}
       <div className="sm:hidden">
-        <CardGrid tools={pages.rows} renderActions={renderActions} />
+        <CardGrid tools={pages.rows} showLender={showLender} renderActions={renderActions} />
       </div>
       <div className="hidden sm:block">
         {pages.waiting ? (

@@ -22,5 +22,19 @@ export const LOAN_STATUS_FILTER: FilterConfig = {
   options: LOAN_FILTERS,
 };
 
+export const USER_FILTER: FilterConfig = {
+  param: "show",
+  label: "Show",
+  options: [
+    { value: "all", label: "Everyone" },
+    { value: "trusted", label: "Trusted Lenders" },
+    { value: "admin", label: "Admins" },
+  ],
+};
+
 export const TOOL_SORTS: ListOption[] = SORT_OPTIONS;
 export const LOAN_SORTS: ListOption[] = LOAN_SORT_OPTIONS;
+export const USER_SORTS: ListOption[] = [
+  { value: "newest", label: "Newest members" },
+  { value: "oldest", label: "Oldest members" },
+];
