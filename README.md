@@ -1,5 +1,7 @@
 # LendLoop
 
+[![CI](https://github.com/sigitfrank/lendloop/actions/workflows/ci.yml/badge.svg)](https://github.com/sigitfrank/lendloop/actions/workflows/ci.yml)
+
 **Borrow what you need. Lend what you don't.**
 
 LendLoop is a neighbourhood tool-lending board. Neighbours list tools they rarely use, others
@@ -475,6 +477,9 @@ Convex   (second auth provider, customJwt)
 Removing listings, Trusted Lender and roles stay in the UI on purpose.
 
 ## Testing
+
+[CI](.github/workflows/ci.yml) runs format check, lint, typecheck and the tests on every push to `main`
+and every pull request.
 
 `pnpm test` runs **42 tests** with [convex-test](https://docs.convex.dev/testing/convex-test),
 executing the real functions as different users (Alice lends, Bob borrows, Carol is a stranger,
