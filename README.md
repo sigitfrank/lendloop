@@ -79,6 +79,9 @@ separate queue: the Convex **outbox + scheduler** is the queue.
 
 ## Local setup
 
+> **Reviewer quick start (about 15 minutes):** steps 1–4 run the app; step 5 adds n8n + Mailpit
+> for the automations; step 6 (Connect Claude) is optional.
+
 ### Prerequisites
 
 - Node.js **22.12+** (Convex 1.49 and Vitest 5 require it) and **pnpm**
@@ -90,7 +93,7 @@ separate queue: the Convex **outbox + scheduler** is the queue.
 ### 1. Install
 
 ```bash
-git clone <this repo> lendloop && cd lendloop
+git clone https://github.com/sigitfrank/lendloop.git lendloop && cd lendloop
 pnpm install
 ```
 
@@ -170,7 +173,7 @@ Convex runs in the cloud, so it can only reach n8n through a public URL; a Cloud
 provides one.
 
 ```bash
-pnpm n8n:setup                 # add --app-url http://localhost:3001 if the app runs elsewhere
+pnpm n8n:setup                 # app not on port 3000? add --app-url http://localhost:<port>
 docker compose up -d           # n8n http://localhost:5678 · Mailpit http://localhost:8025
 ```
 
@@ -222,9 +225,19 @@ Run it again: no second email (one reminder per loan per day).
 
 ### 6. Connect Claude (MCP)
 
-One-time, in the Clerk dashboard: **Configure → OAuth applications → Settings**, turn on
-**dynamic client registration** (DCR, and CIMD if offered) so Claude can register itself, and
-set the default scopes to `openid profile email`.
+One-time, in the Clerk dashboard: **Configure → OAuth applications → Settings** tab (don't add
+anything on the Applications tab; Claude registers itself the first time you sign in):
+
+| Setting                                          | Value                                                                |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| **Publish CIMD support**                         | On, with **Client admission → Any compatible CIMD client**           |
+| **Publish DCR support**                          | On (marked deprecated, but some MCP clients still register this way) |
+| **Allowed / Default scopes for dynamic clients** | `email`, `profile`, `offline_access`                                 |
+| **Require PKCE**                                 | On                                                                   |
+| **Access token format**                          | JWT access tokens (the default)                                      |
+
+`offline_access` lets Claude refresh its sign-in instead of asking again every hour. Production
+would restrict admission to known clients (see [PRODUCTION.md](PRODUCTION.md)).
 
 Then, signed in to LendLoop, open **Connect Claude** and copy the command, e.g.:
 
@@ -377,7 +390,7 @@ existence isn't revealed.
 | `GET /n8n/overdue-loans` | loan id, tool name, end date, **borrower's** first name + email, idempotency key                        | lender's email, description                          |
 | Error reports from n8n   | workflow, node, message, execution id                                                                   | item data                                            |
 | Automation log           | method, path, status, duration, tool name, short message                                                | payloads, emails, secrets                            |
-| Clerk session token      | `name`, `email` claims                                                                                  | only used to keep the user's own row current         |
+| Clerk session token      | `name`, `email` claims, used only to keep the user's own row current                                    | other Clerk profile data (phone, metadata)           |
 
 n8n's own execution history contains recipient emails, so **n8n prunes executions after 7 days**
 (`EXECUTIONS_DATA_PRUNE`, `EXECUTIONS_DATA_MAX_AGE=168`), and the Convex automation log is pruned
@@ -488,11 +501,10 @@ plus an admin).
 
 ## Design decisions and trade-offs
 
-- **Why n8n at all?** For this app alone, Convex actions + a Convex cron could send the emails
-  directly, with fewer moving parts. n8n earns its place when automations change often and
-  non-engineers own them (copy changes, adding Slack or a CRM step without a deploy). So business
-  rules and data stay in Convex, and n8n is a replaceable executor behind a signed, idempotent
-  contract.
+- **Convex decides, n8n executes.** Business rules, permissions and data stay in Convex; n8n only
+  performs the side effects (emails) and reports back through a signed, idempotent contract.
+  Automations can change (new email copy, adding a Slack or CRM step) without touching app code,
+  and n8n stays replaceable.
 - **Push and pull.** Loan events are pushed by Convex (webhook); reminders are pulled by n8n on
   its own schedule. If n8n is down at 09:00 it doesn't catch up; running WF2 hourly is safe
   because of the per-day idempotency key (see PRODUCTION.md).
