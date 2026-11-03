@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "n8n:setup": "node scripts/setup-n8n.mjs",
+    "tunnel": "node scripts/tunnel.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.23",

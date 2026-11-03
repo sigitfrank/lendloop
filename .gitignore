@@ -33,6 +33,8 @@ yarn-error.log*
 # env files (examples without values are committed)
 .env*
 !.env.example
+# n8n secrets (the .env* rule above doesn't match this name)
+n8n.env
 !n8n.env.example
 
 # private working notes

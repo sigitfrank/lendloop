@@ -1,0 +1,35 @@
+# Local automation stack: n8n + Mailpit.
+#   1. pnpm n8n:setup        → creates n8n.env (shared secret + Convex URL)
+#   2. docker compose up -d  → n8n at http://localhost:5678, inbox at http://localhost:8025
+#   3. pnpm tunnel           → public HTTPS URL so Convex (cloud) can reach n8n
+# Stop with: docker compose down   (n8n data is kept in the n8n_data volume)
+name: lendloop
+
+services:
+  n8n:
+    image: n8nio/n8n:3.1.0 # pinned so everyone runs the same version
+    ports:
+      - "5678:5678"
+    env_file: n8n.env # LENDLOOP_HMAC_SECRET, LENDLOOP_CONVEX_URL (never committed)
+    environment:
+      # Loan dates and "overdue" are UTC calendar days, so schedules run in UTC.
+      GENERIC_TIMEZONE: UTC
+      TZ: UTC
+      # Workflows read the secret via {{ $env.LENDLOOP_HMAC_SECRET }}, so it
+      # never appears in the workflow JSON.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - mailpit
+
+  mailpit:
+    # Same image + tag commonly already pulled, so it isn't downloaded twice.
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025" # inbox UI
+      - "1025:1025" # SMTP; n8n sends to mailpit:1025
+
+volumes:
+  n8n_data:
