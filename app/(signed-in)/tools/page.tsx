@@ -1,29 +1,31 @@
 import { Search } from "lucide-react";
-import { CategoryFilter } from "@/components/category-filter";
+import { ActiveFilters } from "@/components/active-filters";
 import { ListToolbar } from "@/components/list-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { ToolsBrowser } from "@/components/tools-browser";
-import { ViewToggle } from "@/components/view-toggle";
+import { CATEGORY_FILTER, TOOL_SORTS } from "@/lib/list-config";
 import { parseListParams } from "@/lib/list-params";
 
-// Category, search, sort and view all live in the URL and are applied server-side.
+// Category, search and sort live in the URL and are applied server-side.
+// Browsing is grid-only (infinite scroll); the management pages offer a table view.
 export default async function ToolsPage({ searchParams }: PageProps<"/tools">) {
   const params = parseListParams(await searchParams);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         icon={Search}
         title="Browse tools"
         description="Everything your neighbours are lending, with live availability."
+        toolbar={
+          <ListToolbar
+            searchLabel="Search tools…"
+            sortOptions={TOOL_SORTS}
+            filters={[CATEGORY_FILTER]}
+          />
+        }
       />
-      <div className="space-y-3">
-        <CategoryFilter params={params} />
-        <div className="flex items-start gap-3">
-          <ListToolbar pathname="/tools" params={params} searchLabel="Search tools by name" />
-          <ViewToggle pathname="/tools" params={params} />
-        </div>
-      </div>
+      <ActiveFilters filters={[CATEGORY_FILTER]} />
       <ToolsBrowser params={params} />
     </div>
   );

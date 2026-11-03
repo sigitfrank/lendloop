@@ -25,7 +25,7 @@ import { MAX_LOAN_DAYS } from "@/convex/lib/validators";
 import { useToday } from "@/hooks/use-today";
 import { isoToLocalDate, localDateToIso } from "@/lib/calendar-dates";
 import { errorMessage } from "@/lib/errors";
-import { formatDay } from "@/lib/labels";
+import { formatDay, pluralDays } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 export function RequestBorrowDialog({ tool }: { tool: ToolCardData }) {
@@ -137,8 +137,7 @@ export function RequestBorrowDialog({ tool }: { tool: ToolCardData }) {
               </span>
               <span className="text-muted-foreground">
                 {" "}
-                · {loanLengthDays(startDate, endDate)} day
-                {loanLengthDays(startDate, endDate) === 1 ? "" : "s"}
+                · {pluralDays(loanLengthDays(startDate, endDate))}
               </span>
             </>
           ) : (

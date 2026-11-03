@@ -1,18 +1,24 @@
 "use client";
 
 import { Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { useConvexAuth, useQuery } from "convex/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
+import { api } from "@/convex/_generated/api";
 
 const NAV_LINKS = [
   { href: "/tools", label: "Browse tools" },
   { href: "/my/listings", label: "My listings" },
-];
+  { href: "/my/requests", label: "My requests" },
+  { href: "/my/incoming", label: "Incoming" },
+] as const;
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const { isAuthenticated } = useConvexAuth();
+  const pendingIncoming = useQuery(api.loans.incomingPendingCount, isAuthenticated ? {} : "skip");
 
   return (
     <header className="border-b bg-card">
@@ -25,14 +31,21 @@ export function SiteHeader() {
             <nav aria-label="Main" className="flex flex-1 items-center gap-1 overflow-x-auto">
               {NAV_LINKS.map((link) => {
                 const active = pathname.startsWith(link.href);
+                const badge = link.href === "/my/incoming" ? pendingIncoming : undefined;
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
                     aria-current={active ? "page" : undefined}
-                    className="rounded-md px-2.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground"
+                    className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground aria-[current=page]:bg-accent aria-[current=page]:text-accent-foreground"
                   >
                     {link.label}
+                    {badge ? (
+                      <span className="rounded-full bg-primary px-1.5 text-[11px] leading-4 font-medium text-primary-foreground">
+                        {badge > 99 ? "99+" : badge}
+                        <span className="sr-only"> pending</span>
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}

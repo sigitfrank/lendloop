@@ -32,14 +32,3 @@ export function parseListParams(raw: RawParams): ListParams {
     category: isCategory(category) ? category : undefined,
   };
 }
-
-/** Builds a URL for `pathname` with `changes` applied; defaults are omitted. */
-export function listHref(pathname: string, current: ListParams, changes: Partial<ListParams>) {
-  const next = { ...current, ...changes };
-  const query = new URLSearchParams();
-  if (next.category) query.set("category", next.category);
-  if (next.q) query.set("q", next.q);
-  if (next.sort !== "newest") query.set("sort", next.sort);
-  if (next.view !== "grid") query.set("view", next.view);
-  return query.size > 0 ? `${pathname}?${query}` : pathname;
-}

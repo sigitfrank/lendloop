@@ -8,6 +8,7 @@ import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireToolOwner, requireUser } from "./lib/auth";
 import { availabilityValidator, getAvailability } from "./lib/availability";
+import { cleanSearch } from "./lib/search";
 import {
   SEARCH_MAX,
   categoryValidator,
@@ -126,11 +127,6 @@ function activeTools(
     : tools.withIndex("by_removedAt", (q) => q.eq("removedAt", undefined)).order(direction);
 }
 
-function cleanSearch(search: string | undefined): string | undefined {
-  const trimmed = search?.trim().slice(0, SEARCH_MAX);
-  return trimmed ? trimmed : undefined;
-}
-
 const listArgs = {
   paginationOpts: paginationOptsValidator,
   search: v.optional(v.string()),
@@ -159,8 +155,12 @@ export const list = query({
   returns: paginationResultValidator(toolCardValidator),
   handler: async (ctx, { paginationOpts, category, search, sort, today }) => {
     const user = await requireUser(ctx);
-    const result = await activeTools(ctx, { category }, sort ?? "newest", cleanSearch(search))
-      .paginate(paginationOpts);
+    const result = await activeTools(
+      ctx,
+      { category },
+      sort ?? "newest",
+      cleanSearch(search, SEARCH_MAX),
+    ).paginate(paginationOpts);
     const page = await Promise.all(
       result.page.map((tool) => toToolCard(ctx, tool, user._id, today)),
     );
@@ -178,7 +178,7 @@ export const mine = query({
       ctx,
       { ownerId: user._id },
       sort ?? "newest",
-      cleanSearch(search),
+      cleanSearch(search, SEARCH_MAX),
     ).paginate(paginationOpts);
     const page = await Promise.all(
       result.page.map((tool) => toToolCard(ctx, tool, user._id, today)),

@@ -33,6 +33,26 @@ export type LoanStatus = Infer<typeof loanStatusValidator>;
 
 export const roleValidator = v.union(v.literal("admin"), v.literal("user"));
 
+/** Loan list filters: a status, "all", or the derived "overdue". */
+export const loanFilterValidator = v.union(
+  v.literal("all"),
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("overdue"),
+  v.literal("returned"),
+  v.literal("declined"),
+  v.literal("cancelled"),
+);
+export type LoanFilter = Infer<typeof loanFilterValidator>;
+
+export const loanSortValidator = v.union(
+  v.literal("newest"),
+  v.literal("oldest"),
+  v.literal("start_asc"),
+  v.literal("start_desc"),
+);
+export type LoanSort = Infer<typeof loanSortValidator>;
+
 export const toolSortValidator = v.union(
   v.literal("newest"),
   v.literal("oldest"),

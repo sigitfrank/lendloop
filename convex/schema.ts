@@ -58,11 +58,26 @@ export default defineSchema({
     decidedAt: v.optional(v.number()),
     returnedAt: v.optional(v.number()),
     // Overdue is derived: status "approved" and endDate < today.
+    // Snapshot at request time of tool name + both first names, for search.
+    searchText: v.string(),
   })
     .index("by_toolId_and_status", ["toolId", "status"])
+    // My requests / Incoming: one index per (side × status filter × sort).
+    // Plain indexes order by creation (newest/oldest); *_startDate by start date.
     .index("by_ownerId", ["ownerId"])
+    .index("by_ownerId_and_startDate", ["ownerId", "startDate"])
+    .index("by_ownerId_and_status", ["ownerId", "status"])
+    .index("by_ownerId_and_status_and_startDate", ["ownerId", "status", "startDate"])
     .index("by_borrowerId", ["borrowerId"])
-    .index("by_status_and_endDate", ["status", "endDate"]),
+    .index("by_borrowerId_and_startDate", ["borrowerId", "startDate"])
+    .index("by_borrowerId_and_status", ["borrowerId", "status"])
+    .index("by_borrowerId_and_status_and_startDate", ["borrowerId", "status", "startDate"])
+    // Overdue reminders (n8n): approved loans whose endDate has passed.
+    .index("by_status_and_endDate", ["status", "endDate"])
+    .searchIndex("search_text", {
+      searchField: "searchText",
+      filterFields: ["ownerId", "borrowerId", "status"],
+    }),
 
   // Audit trail of automation outcomes; idempotencyKey makes write-backs safe to retry.
   automationEvents: defineTable({

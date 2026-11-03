@@ -1,4 +1,12 @@
-import type { Category, Condition, ToolSort } from "@/convex/lib/validators";
+import type { Category, Condition, LoanSort, ToolSort } from "@/convex/lib/validators";
+
+// The first option of each list is the default sort.
+export const LOAN_SORT_OPTIONS: { value: LoanSort; label: string }[] = [
+  { value: "newest", label: "Newest request" },
+  { value: "oldest", label: "Oldest request" },
+  { value: "start_asc", label: "Start date (soonest)" },
+  { value: "start_desc", label: "Start date (latest)" },
+];
 
 export const SORT_OPTIONS: { value: ToolSort; label: string }[] = [
   { value: "newest", label: "Newest first" },
@@ -42,6 +50,11 @@ const dayFormat = new Intl.DateTimeFormat("en-GB", {
   month: "short",
   timeZone: "UTC",
 });
+
+/** "1 day", "4 days" */
+export function pluralDays(count: number): string {
+  return `${count} day${count === 1 ? "" : "s"}`;
+}
 
 /** "2026-11-12" → "12 Nov" */
 export function formatDay(isoDate: string): string {

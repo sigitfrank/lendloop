@@ -1,14 +1,14 @@
 "use client";
 
 import type { UsePaginatedQueryReturnType } from "convex/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { PaginationControls } from "@/components/pagination-controls";
 import { ToolCard, type ToolCardData } from "@/components/tool-card";
 import { ToolGridSkeleton } from "@/components/tool-grid-skeleton";
 import { ToolTable } from "@/components/tool-table";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { api } from "@/convex/_generated/api";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
+import { useNumberedPages } from "@/hooks/use-numbered-pages";
 import type { ViewMode } from "@/lib/list-params";
 
 export const PAGE_SIZE = 12;
@@ -53,21 +53,9 @@ function CardGrid({
   );
 }
 
-/** Loads the next server page when the sentinel scrolls into view. */
 function InfiniteGrid({ query, renderActions }: Pick<Props, "query" | "renderActions">) {
   const { results, status, loadMore } = query;
-  const sentinel = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const node = sentinel.current;
-    if (!node || status !== "CanLoadMore") return;
-    const observer = new IntersectionObserver(
-      ([entry]) => entry.isIntersecting && loadMore(PAGE_SIZE),
-      { rootMargin: "400px" }, // start loading before the user hits the bottom
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [status, loadMore]);
+  const sentinel = useInfiniteScroll(status, loadMore, PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -81,74 +69,27 @@ function InfiniteGrid({ query, renderActions }: Pick<Props, "query" | "renderAct
   );
 }
 
-/**
- * Numbered pages over Convex cursor pagination: pages are numbered as they are
- * reached (no total count or jump-to-page, by design; see README).
- */
 function PagedTable({
   query,
   showLender,
   renderActions,
 }: Pick<Props, "query" | "showLender" | "renderActions">) {
-  const { results, status, loadMore } = query;
-  const [page, setPage] = useState(1);
-
-  const loadedPages = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
-  const pageCount = status === "Exhausted" ? loadedPages : Math.max(loadedPages, page);
-  const hasNext = page < loadedPages || status === "CanLoadMore";
-  const start = (page - 1) * PAGE_SIZE;
-  const rows = results.slice(start, start + PAGE_SIZE);
-  const waiting = rows.length === 0 && status === "LoadingMore";
-
-  function goTo(target: number) {
-    if (target > loadedPages && status === "CanLoadMore") loadMore(PAGE_SIZE);
-    setPage(target);
-  }
+  const pages = useNumberedPages(query.results, query.status, query.loadMore, PAGE_SIZE);
 
   return (
     <div className="space-y-4">
       {/* Phones: the table collapses to cards. */}
       <div className="sm:hidden">
-        <CardGrid tools={rows} renderActions={renderActions} />
+        <CardGrid tools={pages.rows} renderActions={renderActions} />
       </div>
       <div className="hidden sm:block">
-        {waiting ? (
+        {pages.waiting ? (
           <Skeleton className="h-64 w-full rounded-xl" />
         ) : (
-          <ToolTable tools={rows} showLender={showLender} renderActions={renderActions} />
+          <ToolTable tools={pages.rows} showLender={showLender} renderActions={renderActions} />
         )}
       </div>
-
-      <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground" aria-live="polite">
-          {rows.length > 0 && `Showing ${start + 1}–${start + rows.length}`}
-        </p>
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="sm" onClick={() => goTo(page - 1)} disabled={page === 1}>
-            <ChevronLeft aria-hidden /> Previous
-          </Button>
-          {Array.from({ length: pageCount }, (_, i) => i + 1).map((n) => (
-            <Button
-              key={n}
-              size="sm"
-              variant={n === page ? "default" : "ghost"}
-              aria-current={n === page ? "page" : undefined}
-              onClick={() => goTo(n)}
-              className="min-w-8"
-            >
-              {n}
-            </Button>
-          ))}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => goTo(page + 1)}
-            disabled={!hasNext || waiting}
-          >
-            Next <ChevronRight aria-hidden />
-          </Button>
-        </div>
-      </nav>
+      <PaginationControls pages={pages} />
     </div>
   );
 }

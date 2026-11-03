@@ -1,10 +1,11 @@
 import { Package, Plus } from "lucide-react";
+import { ActiveFilters } from "@/components/active-filters";
 import { ListToolbar } from "@/components/list-toolbar";
 import { MyListings } from "@/components/my-listings";
 import { PageHeader } from "@/components/page-header";
 import { ToolFormDialog } from "@/components/tool-form-dialog";
 import { Button } from "@/components/ui/button";
-import { ViewToggle } from "@/components/view-toggle";
+import { TOOL_SORTS } from "@/lib/list-config";
 import { parseListParams } from "@/lib/list-params";
 
 export default async function MyListingsPage({ searchParams }: PageProps<"/my/listings">) {
@@ -13,7 +14,7 @@ export default async function MyListingsPage({ searchParams }: PageProps<"/my/li
   const addButton = (
     <ToolFormDialog
       trigger={
-        <Button>
+        <Button className="h-9">
           <Plus aria-hidden /> List a tool
         </Button>
       }
@@ -21,17 +22,17 @@ export default async function MyListingsPage({ searchParams }: PageProps<"/my/li
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         icon={Package}
         title="My listings"
         description="Tools you're lending to the neighbourhood."
+        toolbar={
+          <ListToolbar searchLabel="Search your listings…" sortOptions={TOOL_SORTS} viewToggle />
+        }
         action={addButton}
       />
-      <div className="flex items-start gap-3">
-        <ListToolbar pathname="/my/listings" params={params} searchLabel="Search your listings" />
-        <ViewToggle pathname="/my/listings" params={params} />
-      </div>
+      <ActiveFilters />
       <MyListings params={params} addButton={addButton} />
     </div>
   );

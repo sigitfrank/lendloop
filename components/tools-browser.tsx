@@ -11,7 +11,7 @@ import type { ListParams } from "@/lib/list-params";
 
 export function ToolsBrowser({ params }: { params: ListParams }) {
   const today = useToday();
-  const { category, q, sort, view } = params;
+  const { category, q, sort } = params;
   const query = usePaginatedQuery(
     api.tools.list,
     { category, search: q, sort, today },
@@ -34,10 +34,8 @@ export function ToolsBrowser({ params }: { params: ListParams }) {
 
   return (
     <ToolResults
-      // A new key resets the table to page 1 whenever the query changes.
-      key={`${category}|${q}|${sort}`}
       query={query}
-      view={view}
+      view="grid" // browsing is grid-only
       showLender
       empty={empty}
       renderActions={(tool) => (tool.isOwn ? null : <RequestBorrowDialog tool={tool} />)}
