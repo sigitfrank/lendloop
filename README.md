@@ -13,6 +13,9 @@ their own LendLoop sign-in, no API keys, and let it lend and borrow for them.
 Built for the Fluence Full-Stack Developer take-home with **Next.js (App Router) + TypeScript,
 Clerk, Convex and n8n**.
 
+▶ **[Watch the 84-second walkthrough](https://drive.google.com/file/d/137zOVG4Tt02i0OCjnC_isQydz4GR3KWj/view)**
+of how the app works.
+
 ---
 
 ## Contents
