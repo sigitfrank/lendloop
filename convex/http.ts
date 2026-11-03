@@ -22,15 +22,43 @@ function json(status: number, body: unknown) {
 /** A request problem we can describe to the caller (400). */
 class BadRequest extends Error {}
 
-type Handler = (ctx: ActionCtx, body: string, url: URL) => Promise<Response>;
+/** Lets a handler add a message to its automation-log row (e.g. a reported n8n error). */
+type LogNote = { detail?: string };
 
-/** Verify the signature, then run the handler; bad input → 400, never internals. */
+type Handler = (ctx: ActionCtx, body: string, url: URL, note: LogNote) => Promise<Response>;
+
+/**
+ * Verify the signature, then run the handler. Bad input → 400; unexpected
+ * errors → generic 500 (details only in Convex logs). Every request, whatever
+ * its outcome, is written to the automation log.
+ */
 function signedRoute(handler: Handler) {
   return httpAction(async (ctx, request) => {
+    const startedAt = Date.now();
+    const url = new URL(request.url);
+    const note: LogNote = {};
+    const response = await handle(ctx, request, url, note);
+    const detail = response.ok ? note.detail : ((await response.clone().json()).error as string);
+    await ctx.runMutation(internal.automation.logRequest, {
+      direction: "from_n8n",
+      method: request.method,
+      path: url.pathname,
+      statusCode: response.status,
+      durationMs: Date.now() - startedAt,
+      detail,
+    });
+    return response;
+  });
+
+  async function handle(
+    ctx: ActionCtx,
+    request: Request,
+    url: URL,
+    note: LogNote,
+  ): Promise<Response> {
     const secret = env.LENDLOOP_HMAC_SECRET;
     if (!secret) return json(503, { error: "Not configured" });
 
-    const url = new URL(request.url);
     const body = await request.text();
     const valid = await verify(
       secret,
@@ -46,13 +74,14 @@ function signedRoute(handler: Handler) {
     if (!valid) return json(401, { error: "Invalid signature" });
 
     try {
-      return await handler(ctx, body, url);
+      return await handler(ctx, body, url, note);
     } catch (err) {
       if (err instanceof BadRequest) return json(400, { error: err.message });
       if (err instanceof ConvexError) return json(400, { error: String(err.data) });
-      throw err; // unexpected: Convex logs it and returns 500
+      console.error("n8n endpoint failed", url.pathname, err);
+      return json(500, { error: "Internal error" });
     }
-  });
+  }
 }
 
 /** Reads the named string fields from a JSON object body. */
@@ -142,9 +171,10 @@ http.route({
 http.route({
   path: "/n8n/automation-error",
   method: "POST",
-  handler: signedRoute(async (ctx, body) => {
+  handler: signedRoute(async (ctx, body, _url, note) => {
     const f = readFields(body, ["executionId", "workflow", "message"], ["node", "loanId"]);
     const where = f.node ? `${f.workflow} › ${f.node}` : f.workflow;
+    note.detail = `${where}: ${f.message}`; // keep the reported error in the log row
     const result = await ctx.runMutation(internal.automation.recordEvent, {
       idempotencyKey: errorKey(f.executionId),
       type: "error",

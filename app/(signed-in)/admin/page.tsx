@@ -4,6 +4,7 @@ import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActiveFilters } from "@/components/active-filters";
+import { AdminAutomationLog } from "@/components/admin/admin-automation-log";
 import { AdminListings } from "@/components/admin/admin-listings";
 import { AdminLoans } from "@/components/admin/admin-loans";
 import { AdminUsers } from "@/components/admin/admin-users";
@@ -15,6 +16,7 @@ import {
   CATEGORY_FILTER,
   LOAN_SORTS,
   LOAN_STATUS_FILTER,
+  LOG_STATUS_FILTER,
   TOOL_SORTS,
   USER_FILTER,
   USER_SORTS,
@@ -24,26 +26,43 @@ import {
 import { parseListParams } from "@/lib/list-params";
 import { parseLoanListParams } from "@/lib/loan-filters";
 
-const TOOLBARS: Record<
-  (typeof ADMIN_TABS)[number]["value"],
-  { searchLabel: string; sortOptions: ListOption[]; filters: FilterConfig[] }
-> = {
+type TabToolbar = {
+  searchLabel?: string;
+  sortOptions?: ListOption[];
+  filters: FilterConfig[];
+  viewToggle: boolean;
+};
+
+const TOOLBARS: Record<(typeof ADMIN_TABS)[number]["value"], TabToolbar> = {
   loans: {
     searchLabel: "Search tool or person…",
     sortOptions: LOAN_SORTS,
     filters: [LOAN_STATUS_FILTER],
+    viewToggle: true,
   },
   listings: {
     searchLabel: "Search listings…",
     sortOptions: TOOL_SORTS,
     filters: [CATEGORY_FILTER],
+    viewToggle: true,
   },
   users: {
     searchLabel: "Search by name…",
     sortOptions: USER_SORTS,
     filters: [USER_FILTER],
+    viewToggle: true,
+  },
+  // The log is always newest first (or best match when searching); no grid/table.
+  automations: {
+    searchLabel: "Search path, tool or message…",
+    filters: [LOG_STATUS_FILTER],
+    viewToggle: false,
   },
 };
+
+function firstParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   // Server-side gate: non-admins get a 404 (the page doesn't reveal it exists).
@@ -61,8 +80,8 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
       <PageHeader
         icon={ShieldCheck}
         title="Admin"
-        description="Every loan, listing and member on LendLoop."
-        toolbar={<ListToolbar key={tab} {...toolbar} viewToggle />}
+        description="Every loan, listing, member and automation on LendLoop."
+        toolbar={<ListToolbar key={tab} {...toolbar} />}
       />
 
       <nav aria-label="Admin sections" className="flex gap-1 border-b">
@@ -83,6 +102,12 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
       {tab === "loans" && <AdminLoans params={parseLoanListParams(raw)} />}
       {tab === "listings" && <AdminListings params={parseListParams(raw)} />}
       {tab === "users" && <AdminUsers params={parseUserListParams(raw)} />}
+      {tab === "automations" && (
+        <AdminAutomationLog
+          filter={firstParam(raw.status) ?? "all"}
+          search={firstParam(raw.q)?.trim() || undefined}
+        />
+      )}
     </div>
   );
 }

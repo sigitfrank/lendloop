@@ -32,6 +32,25 @@ export const USER_FILTER: FilterConfig = {
   ],
 };
 
+/** Automation log: HTTP status of each call (0 = n8n/Convex unreachable). */
+export const LOG_STATUS_FILTER: FilterConfig = {
+  param: "status",
+  label: "Status",
+  options: [
+    { value: "all", label: "All requests" },
+    { value: "failed", label: "Failed (not 2xx)" },
+    { value: "workflow-errors", label: "n8n workflow errors" },
+    { value: "200", label: "200 OK" },
+    { value: "202", label: "202 Accepted" },
+    { value: "400", label: "400 Bad request" },
+    { value: "401", label: "401 Unauthorized" },
+    { value: "404", label: "404 Not found" },
+    { value: "500", label: "500 Server error" },
+    { value: "503", label: "503 Unavailable" },
+    { value: "0", label: "Network error" },
+  ],
+};
+
 export const TOOL_SORTS: ListOption[] = SORT_OPTIONS;
 export const LOAN_SORTS: ListOption[] = LOAN_SORT_OPTIONS;
 export const USER_SORTS: ListOption[] = [

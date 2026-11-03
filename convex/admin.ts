@@ -25,7 +25,9 @@ export const loans = query({
       search: cleanSearch(search, SEARCH_MAX),
       today,
     }).paginate(paginationOpts);
-    const page = await Promise.all(result.page.map((loan) => toLoanView(ctx, loan, today)));
+    const page = await Promise.all(
+      result.page.map((loan) => toLoanView(ctx, loan, today, { includeDetail: true })),
+    );
     return { ...result, page };
   },
 });
@@ -149,5 +151,84 @@ export const setTrustedLender = mutation({
     await requireAdmin(ctx);
     await ctx.db.patch("users", userId, { trustedLender: trusted });
     return null;
+  },
+});
+
+/** Endpoint the n8n error workflow (WF3) reports failed executions to. */
+const WORKFLOW_ERROR_PATH = "/n8n/automation-error";
+
+/**
+ * Automation log: every HTTP call between Convex and n8n (last 30 days), newest
+ * first. filter: "all", "failed" (anything not 2xx), "workflow-errors" (failures
+ * n8n reported via the error workflow; the HTTP call itself is a 200) or a
+ * status code such as "503" (0 = network error). Admin-only, so it includes detail.
+ */
+export const automationLog = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    filter: v.optional(v.string()),
+    search: v.optional(v.string()),
+  },
+  returns: paginationResultValidator(
+    v.object({
+      _id: v.id("automationLog"),
+      _creationTime: v.number(),
+      direction: v.union(v.literal("to_n8n"), v.literal("from_n8n")),
+      method: v.string(),
+      path: v.string(),
+      statusCode: v.number(),
+      ok: v.boolean(),
+      /** An n8n workflow failure reported to Convex (shown as an error). */
+      isWorkflowError: v.boolean(),
+      durationMs: v.optional(v.number()),
+      detail: v.optional(v.string()),
+      toolName: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, { paginationOpts, filter = "all", search }) => {
+    await requireAdmin(ctx);
+    const log = ctx.db.query("automationLog");
+    const code = /^\d{1,3}$/.test(filter) ? Number(filter) : undefined;
+    const text = cleanSearch(search, SEARCH_MAX);
+
+    // With a search, the same filters apply as search-index filters
+    // (results are relevance-ordered); without one, indexes give newest first.
+    const query = text
+      ? log.withSearchIndex("search_text", (q) => {
+          const s = q.search("searchText", text);
+          if (filter === "failed") return s.eq("ok", false);
+          if (filter === "workflow-errors") return s.eq("path", WORKFLOW_ERROR_PATH);
+          if (code !== undefined) return s.eq("statusCode", code);
+          return s;
+        })
+      : (filter === "failed"
+          ? log.withIndex("by_ok", (q) => q.eq("ok", false))
+          : filter === "workflow-errors"
+            ? log.withIndex("by_path", (q) => q.eq("path", WORKFLOW_ERROR_PATH))
+            : code !== undefined
+              ? log.withIndex("by_statusCode", (q) => q.eq("statusCode", code))
+              : log
+        ).order("desc");
+    const result = await query.paginate(paginationOpts);
+    const page = await Promise.all(
+      result.page.map(async (row) => {
+        const loan = row.loanId ? await ctx.db.get("loans", row.loanId) : null;
+        const tool = loan ? await ctx.db.get("tools", loan.toolId) : null;
+        return {
+          _id: row._id,
+          _creationTime: row._creationTime,
+          direction: row.direction,
+          method: row.method,
+          path: row.path,
+          statusCode: row.statusCode,
+          ok: row.ok,
+          isWorkflowError: row.path === WORKFLOW_ERROR_PATH,
+          durationMs: row.durationMs,
+          detail: row.detail,
+          toolName: tool?.name,
+        };
+      }),
+    );
+    return { ...result, page };
   },
 });

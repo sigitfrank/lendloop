@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { toIsoDate } from "./lib/dates";
 import { SIGNATURE_HEADER, TIMESTAMP_HEADER, sign, verify } from "./lib/hmac";
@@ -230,4 +230,173 @@ describe("outbox delivery to n8n", () => {
       }),
     ]);
   });
+});
+
+describe("automation activity on loans (bonus)", () => {
+  test("parties see retrying → failed in plain status; only admins see the error detail", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 503 })));
+    const { t } = await setupOverdueLoan();
+    await t.run(async (ctx) => {
+      await ctx.db.insert("users", {
+        tokenIdentifier: "test|admin",
+        name: "Ada Admin",
+        email: "admin@example.com",
+        role: "admin",
+        trustedLender: false,
+      });
+    });
+    const as = (who: string) => t.withIdentity({ tokenIdentifier: `test|${who}`, subject: who, issuer: "test" });
+    const toolId = await t.run(async (ctx) => (await ctx.db.query("tools").first())!._id);
+    await as("bob").mutation(api.loans.request, {
+      toolId,
+      startDate: toIsoDate(Date.now() + 3 * DAY),
+      endDate: toIsoDate(Date.now() + 5 * DAY),
+    });
+    const view = { paginationOpts: { numItems: 10, cursor: null }, filter: "pending" as const, today: toIsoDate(Date.now()) };
+
+    // First delivery attempt fails → the lender sees a retry, without internals.
+    vi.runOnlyPendingTimers();
+    await t.finishInProgressScheduledFunctions();
+    let [loan] = (await as("alice").query(api.loans.incoming, view)).page;
+    expect(loan.activity[0]).toMatchObject({ kind: "retrying", status: "retrying", about: "pending", attempt: 2 });
+    expect(loan.activity[0].detail).toBeUndefined();
+
+    // All retries exhausted → "failed"; still no detail for the parties.
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    [loan] = (await as("alice").query(api.loans.incoming, view)).page;
+    expect(loan.activity).toEqual([
+      expect.objectContaining({ kind: "notification", status: "failed", about: "pending" }),
+    ]);
+    expect(loan.activity[0].detail).toBeUndefined();
+    const [borrowerView] = (await as("bob").query(api.loans.mine, view)).page;
+    expect(borrowerView.activity[0].detail).toBeUndefined();
+
+    // Admins see why, in the loan view and in the automation log.
+    const [adminView] = (await as("admin").query(api.admin.loans, view)).page;
+    expect(adminView.activity[0].detail).toContain("n8n responded 503");
+    const log = (filter: string) =>
+      as("admin").query(api.admin.automationLog, {
+        paginationOpts: { numItems: 20, cursor: null },
+        filter,
+      });
+    const failed = (await log("failed")).page;
+    expect(failed).toHaveLength(5); // one row per delivery attempt
+    expect(failed[0]).toMatchObject({
+      direction: "to_n8n",
+      statusCode: 503,
+      ok: false,
+      toolName: "Drill",
+      detail: "n8n responded 503",
+    });
+    expect((await log("503")).page).toHaveLength(5);
+    expect((await log("200")).page).toHaveLength(0);
+  });
+});
+
+describe("automation log", () => {
+  test("logs n8n → Convex calls with their status, and is admin-only", async () => {
+    const { t, loanId } = await setupOverdueLoan();
+    await t.fetch("/n8n/overdue-loans"); // unsigned → 401
+    const body = JSON.stringify({ idempotencyKey: `overdue:${loanId}:x`, loanId, status: "sent" });
+    await t.fetch("/n8n/reminder-status", {
+      method: "POST",
+      headers: await signedHeaders("POST", "/n8n/reminder-status", body),
+      body,
+    }); // signed → 200
+
+    const rows = await t.run((ctx) => ctx.db.query("automationLog").order("desc").collect());
+    expect(rows.map((r) => [r.direction, r.path, r.statusCode])).toEqual([
+      ["from_n8n", "/n8n/reminder-status", 200],
+      ["from_n8n", "/n8n/overdue-loans", 401],
+    ]);
+    expect(rows[1].detail).toBe("Invalid signature");
+
+    const bob = t.withIdentity({ tokenIdentifier: "test|bob", subject: "bob", issuer: "test" });
+    await expect(
+      bob.query(api.admin.automationLog, { paginationOpts: { numItems: 5, cursor: null } }),
+    ).rejects.toThrowError(/permission/i);
+  });
+
+  test("rows older than 30 days are pruned", async () => {
+    vi.useFakeTimers();
+    const { t } = await setupOverdueLoan();
+    const row = {
+      direction: "from_n8n" as const,
+      method: "GET",
+      path: "/n8n/overdue-loans",
+      statusCode: 200,
+      ok: true,
+    };
+    await t.run((ctx) => ctx.db.insert("automationLog", row)); // will be 31 days old
+    vi.advanceTimersByTime(31 * DAY);
+    await t.run((ctx) => ctx.db.insert("automationLog", row)); // fresh
+
+    expect(await t.mutation(internal.automation.pruneLog, {})).toEqual({ deleted: 1 });
+    expect(await t.run((ctx) => ctx.db.query("automationLog").collect())).toHaveLength(1);
+  });
+});
+
+test("an n8n workflow error stays visible in the log with its message", async () => {
+  const { t } = await setupOverdueLoan();
+  await t.run((ctx) =>
+    ctx.db.insert("users", {
+      tokenIdentifier: "test|admin",
+      name: "Ada Admin",
+      email: "admin@example.com",
+      role: "admin",
+      trustedLender: false,
+    }),
+  );
+  const body = JSON.stringify({
+    executionId: "777",
+    workflow: "LendLoop · Overdue reminders",
+    node: "Send reminder (Mailpit)",
+    message: "SMTP connection refused",
+  });
+  await t.fetch("/n8n/automation-error", {
+    method: "POST",
+    headers: await signedHeaders("POST", "/n8n/automation-error", body),
+    body,
+  });
+
+  const admin = t.withIdentity({ tokenIdentifier: "test|admin", subject: "admin", issuer: "test" });
+  const { page } = await admin.query(api.admin.automationLog, {
+    paginationOpts: { numItems: 10, cursor: null },
+    filter: "workflow-errors",
+  });
+  expect(page).toEqual([
+    expect.objectContaining({
+      statusCode: 200, // the report was accepted…
+      isWorkflowError: true, // …but it describes a failure, so it's flagged
+      detail: "LendLoop · Overdue reminders › Send reminder (Mailpit): SMTP connection refused",
+    }),
+  ]);
+});
+
+test("the automation log is searchable, combined with the status filter", async () => {
+  const { t, loanId } = await setupOverdueLoan();
+  await t.run((ctx) =>
+    ctx.db.insert("users", {
+      tokenIdentifier: "test|admin",
+      name: "Ada Admin",
+      email: "admin@example.com",
+      role: "admin",
+      trustedLender: false,
+    }),
+  );
+  const log = (args: Record<string, unknown>) => t.mutation(internal.automation.logRequest, {
+    direction: "to_n8n", method: "POST", path: "/webhook/lendloop-loan-events", ...args,
+  } as never);
+  await log({ statusCode: 503, loanId, detail: "n8n responded 503" });
+  await log({ statusCode: 202, loanId });
+
+  const admin = t.withIdentity({ tokenIdentifier: "test|admin", subject: "admin", issuer: "test" });
+  const find = (search: string, filter = "all") =>
+    admin.query(api.admin.automationLog, { paginationOpts: { numItems: 10, cursor: null }, search, filter });
+
+  expect((await find("Drill")).page).toHaveLength(2); // tool name of the linked loan
+  expect((await find("responded")).page).toEqual([expect.objectContaining({ statusCode: 503 })]);
+  expect((await find("Drill", "failed")).page).toEqual([expect.objectContaining({ statusCode: 503 })]);
+  expect((await find("Drill", "202")).page).toEqual([expect.objectContaining({ statusCode: 202 })]);
 });

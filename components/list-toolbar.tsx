@@ -30,8 +30,10 @@ export function ListToolbar({
   filters = [],
   viewToggle = false,
 }: {
-  searchLabel: string;
-  sortOptions: ListOption[];
+  /** Omit to hide the search box. */
+  searchLabel?: string;
+  /** Omit to hide the sort menu. */
+  sortOptions?: ListOption[];
   filters?: FilterConfig[];
   viewToggle?: boolean;
 }) {
@@ -58,24 +60,26 @@ export function ListToolbar({
 
   return (
     <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap">
-      <div className="relative min-w-48 flex-1 lg:w-60 lg:flex-none">
-        <Search
-          className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <Input
-          type="search"
-          value={search}
-          maxLength={SEARCH_MAX}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={searchLabel}
-          aria-label={searchLabel}
-          className="h-9 pl-8"
-        />
-      </div>
+      {searchLabel && (
+        <div className="relative min-w-48 flex-1 lg:w-60 lg:flex-none">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={search}
+            maxLength={SEARCH_MAX}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={searchLabel}
+            aria-label={searchLabel}
+            className="h-9 pl-8"
+          />
+        </div>
+      )}
 
       {filters.length > 0 && <FiltersMenu filters={filters} />}
-      <SortMenu options={sortOptions} searching={searching} />
+      {sortOptions && <SortMenu options={sortOptions} searching={searching} />}
       {viewToggle && <ViewSwitch />}
     </div>
   );

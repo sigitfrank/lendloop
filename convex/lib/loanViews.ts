@@ -2,6 +2,7 @@ import { paginationOptsValidator, type OrderedQuery } from "convex/server";
 import { v } from "convex/values";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+import { activityItemValidator, getActivity } from "./activity";
 import {
   categoryValidator,
   loanFilterValidator,
@@ -30,6 +31,8 @@ export const loanViewValidator = v.object({
   tool: v.object({ name: v.string(), category: categoryValidator, removed: v.boolean() }),
   lender: personValidator,
   borrower: personValidator,
+  /** Recent automation activity (notifications, reminders, retries). */
+  activity: v.array(activityItemValidator),
 });
 
 function person(user: Doc<"users"> | null) {
@@ -39,7 +42,13 @@ function person(user: Doc<"users"> | null) {
   };
 }
 
-export async function toLoanView(ctx: QueryCtx, loan: Doc<"loans">, today: string) {
+/** includeDetail: admins see error text on activity items; loan parties don't. */
+export async function toLoanView(
+  ctx: QueryCtx,
+  loan: Doc<"loans">,
+  today: string,
+  { includeDetail = false }: { includeDetail?: boolean } = {},
+) {
   const tool = await ctx.db.get("tools", loan.toolId);
   return {
     _id: loan._id,
@@ -57,6 +66,7 @@ export async function toLoanView(ctx: QueryCtx, loan: Doc<"loans">, today: strin
     },
     lender: person(await ctx.db.get("users", loan.ownerId)),
     borrower: person(await ctx.db.get("users", loan.borrowerId)),
+    activity: await getActivity(ctx, loan._id, { includeDetail }),
   };
 }
 

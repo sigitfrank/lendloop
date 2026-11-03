@@ -4,6 +4,7 @@ export const ADMIN_TABS = [
   { value: "loans", label: "Loans" },
   { value: "listings", label: "Listings" },
   { value: "users", label: "Users" },
+  { value: "automations", label: "Automation log" },
 ] as const;
 
 export type AdminTab = (typeof ADMIN_TABS)[number]["value"];

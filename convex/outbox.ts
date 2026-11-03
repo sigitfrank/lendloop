@@ -118,6 +118,8 @@ export const deliver = internalAction({
     });
 
     let error: string | undefined;
+    let statusCode = 0; // stays 0 if n8n can't be reached at all
+    const startedAt = Date.now();
     try {
       const response = await fetch(url, {
         method: "POST",
@@ -128,11 +130,21 @@ export const deliver = internalAction({
         },
         body,
       });
+      statusCode = response.status;
       if (!response.ok) error = `n8n responded ${response.status}`;
     } catch (err) {
       error = err instanceof Error ? err.message : "network error";
     }
 
+    await ctx.runMutation(internal.automation.logRequest, {
+      direction: "to_n8n",
+      method: "POST",
+      path: pathname, // no host, no query
+      statusCode,
+      durationMs: Date.now() - startedAt,
+      loanId: prepared.payload.loan.id,
+      detail: error,
+    });
     await ctx.runMutation(internal.outbox.recordAttempt, { outboxId, ok: !error, error });
     return null;
   },

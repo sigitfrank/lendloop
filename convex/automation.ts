@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { overdueReminderKey } from "./lib/keys";
@@ -119,5 +120,61 @@ export const recordEvent = internalMutation({
       at: Date.now(),
     });
     return { duplicate: false };
+  },
+});
+
+// ── HTTP log ───────────────────────────────────────────────────────────────
+
+const LOG_RETENTION_DAYS = 30;
+const PRUNE_BATCH = 500;
+
+/** One row per HTTP call between Convex and n8n (see schema: automationLog). */
+export const logRequest = internalMutation({
+  args: {
+    direction: v.union(v.literal("to_n8n"), v.literal("from_n8n")),
+    method: v.string(),
+    path: v.string(),
+    statusCode: v.number(),
+    durationMs: v.optional(v.number()),
+    loanId: v.optional(v.id("loans")),
+    detail: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const path = args.path.slice(0, 300);
+    const detail = args.detail?.slice(0, 500);
+    const loan = args.loanId ? await ctx.db.get("loans", args.loanId) : null;
+    const tool = loan ? await ctx.db.get("tools", loan.toolId) : null;
+    await ctx.db.insert("automationLog", {
+      ...args,
+      path,
+      detail,
+      ok: args.statusCode >= 200 && args.statusCode < 300,
+      searchText: [args.method, path, args.statusCode, tool?.name, detail]
+        .filter((part) => part !== undefined)
+        .join(" "),
+    });
+    return null;
+  },
+});
+
+/**
+ * Deletes log rows older than 30 days, a batch at a time; schedules itself
+ * again while there is more to delete. Run daily by crons.ts.
+ */
+export const pruneLog = internalMutation({
+  args: {},
+  returns: v.object({ deleted: v.number() }),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const old = await ctx.db
+      .query("automationLog")
+      .withIndex("by_creation_time", (q) => q.lt("_creationTime", cutoff))
+      .take(PRUNE_BATCH);
+    for (const row of old) await ctx.db.delete("automationLog", row._id);
+    if (old.length === PRUNE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.automation.pruneLog, {});
+    }
+    return { deleted: old.length };
   },
 });

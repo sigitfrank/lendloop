@@ -3,6 +3,8 @@
 import type { UsePaginatedQueryReturnType } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { CalendarDays } from "lucide-react";
+import { LoanActivity } from "@/components/loan-activity";
+import { LoanTimeline } from "@/components/loan-timeline";
 import { PaginationControls } from "@/components/pagination-controls";
 import { LoanStatusBadge, TrustedLenderBadge } from "@/components/status-badges";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,6 +110,7 @@ function PagedLoanTable({ query, side, renderActions }: BodyProps) {
                   <TableHead>{PEOPLE_HEADING[side]}</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last update</TableHead>
+                  <TableHead>Automation</TableHead>
                   {renderActions && <TableHead className="pr-4 text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -127,6 +130,13 @@ function PagedLoanTable({ query, side, renderActions }: BodyProps) {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {lastUpdate(loan, now)}
+                    </TableCell>
+                    <TableCell className="max-w-64">
+                      {loan.activity.length > 0 ? (
+                        <LoanActivity items={loan.activity} now={now} limit={1} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     {renderActions && (
                       <TableCell className="pr-4">
@@ -168,7 +178,9 @@ function LoanCardGrid({ loans, side, renderActions }: { loans: LoanView[] } & Om
                   {dateRange(loan)}
                 </div>
                 <People loan={loan} side={side} withPrefix />
-                <p className="text-xs text-muted-foreground">{lastUpdate(loan, now)}</p>
+                <div className="border-t pt-3">
+                  <LoanTimeline loan={loan} now={now} />
+                </div>
               </CardContent>
               {actions && <CardFooter className="justify-end gap-1">{actions}</CardFooter>}
             </Card>
@@ -182,22 +194,42 @@ function LoanCardGrid({ loans, side, renderActions }: { loans: LoanView[] } & Om
 const PEOPLE_HEADING: Record<Side, string> = {
   borrower: "Lender",
   owner: "Borrower",
-  admin: "Lender → Borrower",
+  admin: "Lender · Borrower",
 };
 
-/** The person (or, for admins, both people) relevant to this list. */
+/** The person (or, for admins, both people, labelled) relevant to this list. */
 function People({ loan, side, withPrefix }: { loan: LoanView; side: Side; withPrefix?: boolean }) {
   const lender = loan.lender.firstName;
   const borrower = loan.borrower.firstName;
-  let text: string;
-  if (side === "admin") text = `${lender} → ${borrower}`;
-  else if (side === "borrower") text = withPrefix ? `Lent by ${lender}` : lender;
-  else text = withPrefix ? `Requested by ${borrower}` : borrower;
+  const trusted = loan.lender.trustedLender && <TrustedLenderBadge />;
+
+  if (side === "admin") {
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-xs text-muted-foreground">Lender</span>
+        <span>{lender}</span>
+        {trusted}
+        <span className="text-muted-foreground" aria-hidden>
+          ·
+        </span>
+        <span className="text-xs text-muted-foreground">Borrower</span>
+        <span>{borrower}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span>{text}</span>
-      {side !== "owner" && loan.lender.trustedLender && <TrustedLenderBadge />}
+      <span>
+        {side === "borrower"
+          ? withPrefix
+            ? `Lent by ${lender}`
+            : lender
+          : withPrefix
+            ? `Requested by ${borrower}`
+            : borrower}
+      </span>
+      {side === "borrower" && trusted}
     </div>
   );
 }

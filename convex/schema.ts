@@ -120,5 +120,30 @@ export default defineSchema({
     lastError: v.optional(v.string()),
   })
     .index("by_idempotencyKey", ["idempotencyKey"])
+    .index("by_loanId_and_status", ["loanId", "status"]) // retries shown on the loan
     .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"]),
+
+  // HTTP-level log of every call between Convex and n8n (both directions), for
+  // the admin "Automation log". No payloads, secrets or emails. Kept 30 days
+  // (crons.ts prunes older rows).
+  automationLog: defineTable({
+    direction: v.union(v.literal("to_n8n"), v.literal("from_n8n")),
+    method: v.string(),
+    path: v.string(),
+    statusCode: v.number(), // 0 = network error / no response
+    ok: v.boolean(), // 2xx
+    durationMs: v.optional(v.number()),
+    loanId: v.optional(v.id("loans")),
+    detail: v.optional(v.string()),
+    // Method, path, status, tool name and message, for admin search. Optional
+    // only because older rows predate it; they age out after 30 days.
+    searchText: v.optional(v.string()),
+  })
+    .index("by_ok", ["ok"])
+    .index("by_statusCode", ["statusCode"])
+    .index("by_path", ["path"]) // e.g. n8n workflow error reports
+    .searchIndex("search_text", {
+      searchField: "searchText",
+      filterFields: ["ok", "statusCode", "path"],
+    }),
 });
