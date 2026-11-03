@@ -3,6 +3,7 @@
 import { usePaginatedQuery } from "convex/react";
 import { SearchX } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
+import { RequestBorrowDialog } from "@/components/request-borrow-dialog";
 import { PAGE_SIZE, ToolResults } from "@/components/tool-results";
 import { api } from "@/convex/_generated/api";
 import { useToday } from "@/hooks/use-today";
@@ -39,6 +40,7 @@ export function ToolsBrowser({ params }: { params: ListParams }) {
       view={view}
       showLender
       empty={empty}
+      renderActions={(tool) => (tool.isOwn ? null : <RequestBorrowDialog tool={tool} />)}
     />
   );
 }

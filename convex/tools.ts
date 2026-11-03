@@ -19,6 +19,7 @@ import {
 } from "./lib/validators";
 
 const PUBLIC_LIST_LIMIT = 48;
+const MAX_PENDING_CHECKED = 100;
 
 /** What a signed-in user sees for a tool. Owner identity is first name only. */
 const toolCardValidator = v.object({
@@ -29,6 +30,8 @@ const toolCardValidator = v.object({
   description: v.string(),
   owner: v.object({ firstName: v.string(), trustedLender: v.boolean() }),
   isOwn: v.boolean(),
+  /** The viewer already has a pending request on this tool. */
+  requestedByMe: v.boolean(),
   availability: availabilityValidator,
 });
 
@@ -39,6 +42,15 @@ async function toToolCard(
   today: string,
 ) {
   const owner = await ctx.db.get("users", tool.ownerId);
+  const isOwn = tool.ownerId === viewerId;
+  const pending = isOwn
+    ? []
+    : await ctx.db
+        .query("loans")
+        .withIndex("by_toolId_and_status", (q) =>
+          q.eq("toolId", tool._id).eq("status", "pending"),
+        )
+        .take(MAX_PENDING_CHECKED);
   return {
     _id: tool._id,
     name: tool.name,
@@ -49,7 +61,8 @@ async function toToolCard(
       firstName: owner?.name.split(" ")[0] ?? "A neighbour",
       trustedLender: owner?.trustedLender ?? false,
     },
-    isOwn: tool.ownerId === viewerId,
+    isOwn,
+    requestedByMe: pending.some((loan) => loan.borrowerId === viewerId),
     availability: await getAvailability(ctx, tool._id, today),
   };
 }
