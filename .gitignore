@@ -38,9 +38,6 @@ n8n.env
 .n8n-hmac-secret
 !n8n.env.example
 
-# private working notes
-plan.md
-
 # local AI agent tooling (installed by `convex ai-files`)
 .agents/
 .claude/skills/
@@ -53,5 +50,5 @@ skills-lock.json
 *.tsbuildinfo
 next-env.d.ts
 
-# Video studio and plan (local only)
+# private working notes: take-home plan, video plan and studio
 .idea/
