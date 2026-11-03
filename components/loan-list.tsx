@@ -5,6 +5,7 @@ import type { FunctionReturnType } from "convex/server";
 import { CalendarDays } from "lucide-react";
 import { LoanActivity } from "@/components/loan-activity";
 import { LoanTimeline } from "@/components/loan-timeline";
+import { ToolIconTile } from "@/components/tool-icon";
 import { PaginationControls } from "@/components/pagination-controls";
 import { LoanStatusBadge, TrustedLenderBadge } from "@/components/status-badges";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -118,8 +119,13 @@ function PagedLoanTable({ query, side, renderActions }: BodyProps) {
                 {pages.rows.map((loan) => (
                   <TableRow key={loan._id}>
                     <TableCell className="pl-4">
-                      <div className="font-medium">{loan.tool.name}</div>
-                      <div className="text-xs text-muted-foreground">{toolMeta(loan)}</div>
+                      <div className="flex items-center gap-3">
+                        <ToolIconTile tool={loan.tool} size="sm" />
+                        <div>
+                          <div className="font-medium">{loan.tool.name}</div>
+                          <div className="text-xs text-muted-foreground">{toolMeta(loan)}</div>
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>{dateRange(loan)}</TableCell>
                     <TableCell>
@@ -166,11 +172,14 @@ function LoanCardGrid({ loans, side, renderActions }: { loans: LoanView[] } & Om
           <li key={loan._id}>
             <Card className="h-full">
               <CardHeader className="gap-1.5">
-                <div className="flex items-start justify-between gap-3">
-                  <CardTitle className="text-base leading-snug">{loan.tool.name}</CardTitle>
+                <div className="flex items-start gap-3">
+                  <ToolIconTile tool={loan.tool} />
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base leading-snug">{loan.tool.name}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{toolMeta(loan)}</p>
+                  </div>
                   <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
                 </div>
-                <p className="text-xs text-muted-foreground">{toolMeta(loan)}</p>
               </CardHeader>
               <CardContent className="flex-1 space-y-2 text-sm">
                 <div className="flex items-center gap-1.5">

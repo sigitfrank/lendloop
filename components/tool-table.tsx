@@ -1,4 +1,5 @@
 import { ConditionMeter } from "@/components/condition-meter";
+import { ToolIconTile } from "@/components/tool-icon";
 import { AvailabilityBadge, TrustedLenderBadge } from "@/components/status-badges";
 import type { ToolCardData } from "@/components/tool-card";
 import {
@@ -36,11 +37,16 @@ export function ToolTable({
         <TableBody>
           {tools.map((tool) => (
             <TableRow key={tool._id}>
-              <TableCell className="max-w-72 pl-4">
-                <div className="font-medium">{tool.name}</div>
-                {tool.description && (
-                  <div className="truncate text-xs text-muted-foreground">{tool.description}</div>
-                )}
+              <TableCell className="max-w-80 pl-4">
+                <div className="flex items-center gap-3">
+                  <ToolIconTile tool={tool} size="sm" />
+                  <div className="min-w-0">
+                    <div className="font-medium">{tool.name}</div>
+                    {tool.description && (
+                      <div className="truncate text-xs text-muted-foreground">{tool.description}</div>
+                    )}
+                  </div>
+                </div>
               </TableCell>
               <TableCell className="text-muted-foreground">{categoryLabel(tool.category)}</TableCell>
               <TableCell>

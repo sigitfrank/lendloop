@@ -239,3 +239,21 @@ describe("admin", () => {
     expect((await carol.query(api.users.current, {}))?.role).toBe("admin");
   });
 });
+
+describe("tool icons", () => {
+  test("an icon can be set, cleared on edit, and must come from the allowed set", async () => {
+    const { t, alice, toolId } = await setup();
+    const fields = { name: "Cordless drill", category: "power_tools" as const, condition: "good" as const, description: "" };
+
+    await alice.mutation(api.tools.update, { toolId, ...fields, icon: "drill" });
+    expect((await t.run((ctx) => ctx.db.get(toolId)))?.icon).toBe("drill");
+
+    await alice.mutation(api.tools.update, { toolId, ...fields }); // "Auto" / cleared
+    expect((await t.run((ctx) => ctx.db.get(toolId)))?.icon).toBeUndefined();
+
+    await expect(
+      // @ts-expect-error not one of TOOL_ICONS
+      alice.mutation(api.tools.update, { toolId, ...fields, icon: "rocket" }),
+    ).rejects.toThrowError();
+  });
+});

@@ -4,6 +4,7 @@ import { useMutation } from "convex/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { errorId, FormField } from "@/components/form-field";
+import { IconPicker } from "@/components/icon-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,6 +32,7 @@ import {
   TOOL_NAME_MAX,
   type Category,
   type Condition,
+  type ToolIcon,
 } from "@/convex/lib/validators";
 import { errorMessage } from "@/lib/errors";
 import { CATEGORIES, CONDITIONS } from "@/lib/labels";
@@ -40,6 +42,7 @@ type ToolFormValues = {
   category: Category | "";
   condition: Condition | "";
   description: string;
+  icon?: ToolIcon; // undefined = category default
 };
 type FieldErrors = Partial<Record<keyof ToolFormValues, string>>;
 
@@ -59,7 +62,14 @@ export function ToolFormDialog({
   tool,
   trigger,
 }: {
-  tool?: { _id: Id<"tools">; name: string; category: Category; condition: Condition; description: string };
+  tool?: {
+    _id: Id<"tools">;
+    name: string;
+    category: Category;
+    condition: Condition;
+    description: string;
+    icon?: ToolIcon;
+  };
   trigger: React.ReactNode;
 }) {
   const createTool = useMutation(api.tools.create);
@@ -91,12 +101,12 @@ export function ToolFormDialog({
     const errors = validate(values);
     setFieldErrors(errors);
     setServerError(null);
-    const { name, category, condition, description } = values;
+    const { name, category, condition, description, icon } = values;
     if (Object.keys(errors).length > 0 || !category || !condition) return;
 
     setSaving(true);
     try {
-      const fields = { name, category, condition, description };
+      const fields = { name, category, condition, description, icon };
       if (isEdit) {
         await updateTool({ toolId: tool._id, ...fields });
         toast.success("Listing updated");
@@ -184,6 +194,30 @@ export function ToolFormDialog({
               </Select>
             </FormField>
           </div>
+
+          <FormField
+            id="tool-icon"
+            label="Icon"
+            hint={
+              values.icon ? (
+                <button
+                  type="button"
+                  onClick={() => set("icon", undefined)}
+                  className="text-xs text-primary underline-offset-4 hover:underline"
+                >
+                  Clear
+                </button>
+              ) : (
+                <span className="text-xs text-muted-foreground">Optional · defaults to the category</span>
+              )
+            }
+          >
+            <IconPicker
+              id="tool-icon"
+              value={values.icon}
+              onChange={(icon) => set("icon", icon)}
+            />
+          </FormField>
 
           <FormField
             id="tool-description"

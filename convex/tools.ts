@@ -14,6 +14,7 @@ import {
   categoryValidator,
   cleanToolText,
   conditionValidator,
+  toolIconValidator,
   toolSortValidator,
   type Category,
   type ToolSort,
@@ -29,6 +30,7 @@ const toolCardValidator = v.object({
   category: categoryValidator,
   condition: conditionValidator,
   description: v.string(),
+  icon: v.optional(toolIconValidator),
   owner: v.object({ firstName: v.string(), trustedLender: v.boolean() }),
   isOwn: v.boolean(),
   /** The viewer already has a pending request on this tool. */
@@ -58,6 +60,7 @@ async function toToolCard(
     category: tool.category,
     condition: tool.condition,
     description: tool.description,
+    icon: tool.icon,
     owner: {
       firstName: owner?.name.split(" ")[0] ?? "A neighbour",
       trustedLender: owner?.trustedLender ?? false,
@@ -192,6 +195,7 @@ const toolFields = {
   category: categoryValidator,
   condition: conditionValidator,
   description: v.string(),
+  icon: v.optional(toolIconValidator), // absent → category default
 };
 
 export const create = mutation({
@@ -207,6 +211,7 @@ export const create = mutation({
       description,
       category: args.category,
       condition: args.condition,
+      icon: args.icon,
     });
   },
 });
@@ -223,6 +228,7 @@ export const update = mutation({
       description,
       category: args.category,
       condition: args.condition,
+      icon: args.icon,
     });
     return null;
   },

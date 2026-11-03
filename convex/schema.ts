@@ -5,6 +5,7 @@ import {
   conditionValidator,
   loanStatusValidator,
   roleValidator,
+  toolIconValidator,
 } from "./lib/validators";
 
 export default defineSchema({
@@ -32,6 +33,8 @@ export default defineSchema({
     category: categoryValidator,
     condition: conditionValidator,
     description: v.string(),
+    // Picked by the lender; when absent the UI shows the category's default icon.
+    icon: v.optional(toolIconValidator),
     // Soft delete (by the owner or an admin) keeps loan history intact.
     removedAt: v.optional(v.number()),
     removedBy: v.optional(v.union(v.literal("owner"), v.literal("admin"))),

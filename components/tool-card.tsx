@@ -1,6 +1,7 @@
 import type { FunctionReturnType } from "convex/server";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConditionMeter } from "@/components/condition-meter";
+import { ToolIconTile } from "@/components/tool-icon";
 import { AvailabilityBadge, TrustedLenderBadge } from "@/components/status-badges";
 import type { api } from "@/convex/_generated/api";
 import { categoryLabel } from "@/lib/labels";
@@ -20,11 +21,14 @@ export function ToolCard({
   return (
     <Card className="h-full">
       <CardHeader className="gap-2">
-        <div className="flex items-start justify-between gap-3">
-          <CardTitle className="text-base leading-snug">{tool.name}</CardTitle>
+        <div className="flex items-start gap-3">
+          <ToolIconTile tool={tool} />
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-base leading-snug">{tool.name}</CardTitle>
+            <p className="text-xs text-muted-foreground">{categoryLabel(tool.category)}</p>
+          </div>
           <AvailabilityBadge availability={tool.availability} />
         </div>
-        <p className="text-xs text-muted-foreground">{categoryLabel(tool.category)}</p>
         <ConditionMeter condition={tool.condition} />
       </CardHeader>
       <CardContent className="flex-1 space-y-3">

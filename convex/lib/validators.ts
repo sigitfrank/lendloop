@@ -14,6 +14,43 @@ export const categoryValidator = v.union(
 );
 export type Category = Infer<typeof categoryValidator>;
 
+/**
+ * Icons a lender can pick for a tool (Lucide names, kebab-case). The server
+ * only accepts these; the UI maps each to its Lucide component.
+ */
+export const TOOL_ICONS = [
+  "drill",
+  "hammer",
+  "wrench",
+  "toolbox",
+  "paint-roller",
+  "ruler",
+  "axe",
+  "hard-hat",
+  "shovel",
+  "sprout",
+  "flower",
+  "tree",
+  "tractor",
+  "cooking-pot",
+  "utensils",
+  "blender",
+  "microwave",
+  "tent",
+  "flashlight",
+  "backpack",
+  "compass",
+  "bike",
+  "dumbbell",
+  "spray-can",
+  "washing-machine",
+  "camera",
+  "projector",
+  "package",
+] as const;
+export type ToolIcon = (typeof TOOL_ICONS)[number];
+export const toolIconValidator = v.union(...TOOL_ICONS.map((icon) => v.literal(icon)));
+
 export const conditionValidator = v.union(
   v.literal("new"),
   v.literal("good"),

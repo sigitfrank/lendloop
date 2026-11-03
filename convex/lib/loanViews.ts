@@ -8,6 +8,7 @@ import {
   loanFilterValidator,
   loanSortValidator,
   loanStatusValidator,
+  toolIconValidator,
   type LoanFilter,
   type LoanSort,
   type LoanStatus,
@@ -28,7 +29,12 @@ export const loanViewValidator = v.object({
   endDate: v.string(),
   decidedAt: v.optional(v.number()),
   returnedAt: v.optional(v.number()),
-  tool: v.object({ name: v.string(), category: categoryValidator, removed: v.boolean() }),
+  tool: v.object({
+    name: v.string(),
+    category: categoryValidator,
+    icon: v.optional(toolIconValidator),
+    removed: v.boolean(),
+  }),
   lender: personValidator,
   borrower: personValidator,
   /** Recent automation activity (notifications, reminders, retries). */
@@ -62,6 +68,7 @@ export async function toLoanView(
     tool: {
       name: tool?.name ?? "Removed tool",
       category: tool?.category ?? "other",
+      icon: tool?.icon,
       removed: tool?.removedAt !== undefined,
     },
     lender: person(await ctx.db.get("users", loan.ownerId)),
