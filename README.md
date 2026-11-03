@@ -155,6 +155,15 @@ Convex dashboard: **Functions → users:setRole → Run** with the same argument
 
 Use a second account (e.g. a private window) to borrow from the first.
 
+**Demo data (optional):** with your two accounts (one admin, one user), the user account gets
+20 listings and the admin asks to borrow each once, so both views fill up with loans in every
+state (pending, on loan, upcoming, overdue, returned, declined, cancelled) and their automation
+history. No emails are sent.
+
+```bash
+pnpm convex run devSeed:demoData    # remove again with devSeed:clearDemo
+```
+
 ### 5. n8n + Mailpit
 
 Convex runs in the cloud, so it can only reach n8n through a public URL; a Cloudflare quick tunnel
