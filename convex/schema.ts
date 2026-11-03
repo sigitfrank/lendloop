@@ -23,6 +23,8 @@ export default defineSchema({
   tools: defineTable({
     ownerId: v.id("users"),
     name: v.string(),
+    // Lower-cased copy of `name` so A–Z sorting ignores capitalisation.
+    nameLower: v.string(),
     category: categoryValidator,
     condition: conditionValidator,
     description: v.string(),
@@ -30,9 +32,19 @@ export default defineSchema({
     removedAt: v.optional(v.number()),
     removedBy: v.optional(v.union(v.literal("owner"), v.literal("admin"))),
   })
-    // Active listings, optionally narrowed to one category: eq("removedAt", undefined)
+    // Active listings are eq("removedAt", undefined). One index per (scope × sort):
+    // creation-order indexes give newest/oldest, *_nameLower ones give A–Z/Z–A.
+    .index("by_removedAt", ["removedAt"])
+    .index("by_removedAt_and_nameLower", ["removedAt", "nameLower"])
     .index("by_removedAt_and_category", ["removedAt", "category"])
-    .index("by_ownerId_and_removedAt", ["ownerId", "removedAt"]),
+    .index("by_removedAt_and_category_and_nameLower", ["removedAt", "category", "nameLower"])
+    .index("by_ownerId_and_removedAt", ["ownerId", "removedAt"])
+    .index("by_ownerId_and_removedAt_and_nameLower", ["ownerId", "removedAt", "nameLower"])
+    // Full-text search on the name (results are relevance-ordered).
+    .searchIndex("search_name", {
+      searchField: "name",
+      filterFields: ["removedAt", "category", "ownerId"],
+    }),
 
   // One row per borrow request.
   loans: defineTable({

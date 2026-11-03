@@ -33,6 +33,16 @@ export type LoanStatus = Infer<typeof loanStatusValidator>;
 
 export const roleValidator = v.union(v.literal("admin"), v.literal("user"));
 
+export const toolSortValidator = v.union(
+  v.literal("newest"),
+  v.literal("oldest"),
+  v.literal("name_asc"),
+  v.literal("name_desc"),
+);
+export type ToolSort = Infer<typeof toolSortValidator>;
+
+export const SEARCH_MAX = 100;
+
 // Limits enforced on the server (the UI mirrors them for inline feedback).
 
 export const TOOL_NAME_MAX = 60;
