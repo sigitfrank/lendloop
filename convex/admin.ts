@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { getActiveTool, requireAdmin } from "./lib/auth";
 import { loanListArgs, loansQuery, loanViewValidator, toLoanView } from "./lib/loanViews";
+import { enqueueLoanNotification } from "./lib/outbox";
 import { cleanSearch } from "./lib/search";
 import { SEARCH_MAX, roleValidator } from "./lib/validators";
 
@@ -49,6 +50,7 @@ export const removeTool = mutation({
       .take(MAX_PENDING_DECLINED);
     for (const loan of pending) {
       await ctx.db.patch("loans", loan._id, { status: "declined", decidedAt: now });
+      await enqueueLoanNotification(ctx, loan._id, "declined"); // borrower hears it was declined
     }
     return null;
   },

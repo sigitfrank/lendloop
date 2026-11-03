@@ -5,6 +5,7 @@ import { mutation, query, type MutationCtx } from "./_generated/server";
 import { getActiveTool, getCurrentUser, requireLoanParty, requireUser } from "./lib/auth";
 import { assertValidLoanRange, rangesOverlap, toIsoDate } from "./lib/dates";
 import { loanListArgs, loansQuery, loanViewValidator, toLoanView } from "./lib/loanViews";
+import { enqueueLoanNotification } from "./lib/outbox";
 import { cleanSearch, loanSearchText } from "./lib/search";
 import { SEARCH_MAX, type LoanStatus } from "./lib/validators";
 
@@ -66,7 +67,7 @@ export const request = mutation({
     await assertNoApprovedOverlap(ctx, toolId, { startDate, endDate });
 
     const owner = await ctx.db.get("users", tool.ownerId);
-    return await ctx.db.insert("loans", {
+    const loanId = await ctx.db.insert("loans", {
       toolId,
       ownerId: tool.ownerId, // from the tool, never from the client
       borrowerId: user._id,
@@ -75,6 +76,8 @@ export const request = mutation({
       status: "pending",
       searchText: loanSearchText(tool.name, owner?.name, user.name),
     });
+    await enqueueLoanNotification(ctx, loanId, "pending"); // tell the lender
+    return loanId;
   },
 });
 
@@ -87,6 +90,7 @@ export const cancel = mutation({
     if (side !== "borrower") throw new ConvexError(NOT_ALLOWED);
     assertStatus(loan, "pending");
     await ctx.db.patch("loans", loanId, { status: "cancelled", decidedAt: Date.now() });
+    await enqueueLoanNotification(ctx, loanId, "cancelled");
     return null;
   },
 });
@@ -113,10 +117,9 @@ export const respond = mutation({
       await assertNoApprovedOverlap(ctx, loan.toolId, loan);
     }
 
-    await ctx.db.patch("loans", loanId, {
-      status: decision === "approve" ? "approved" : "declined",
-      decidedAt: Date.now(),
-    });
+    const status = decision === "approve" ? "approved" : "declined";
+    await ctx.db.patch("loans", loanId, { status, decidedAt: Date.now() });
+    await enqueueLoanNotification(ctx, loanId, status);
     return null;
   },
 });
@@ -130,6 +133,7 @@ export const markReturned = mutation({
     if (side !== "owner") throw new ConvexError(NOT_ALLOWED);
     assertStatus(loan, "approved");
     await ctx.db.patch("loans", loanId, { status: "returned", returnedAt: Date.now() });
+    await enqueueLoanNotification(ctx, loanId, "returned");
     return null;
   },
 });
