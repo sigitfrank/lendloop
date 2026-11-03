@@ -178,16 +178,22 @@ Open n8n (http://localhost:5678) and **create the local owner account first**: t
 makes n8n reachable from the internet, so don't start it while n8n is still unclaimed. Then:
 
 ```bash
+pnpm n8n:import                # credentials + workflows, linked and published
 pnpm tunnel                    # own terminal, keep it running
 ```
 
 - `pnpm n8n:setup` generates the shared HMAC secret, stores it in Convex
   (`LENDLOOP_HMAC_SECRET`) and in git-ignored `.n8n-hmac-secret`, and writes `n8n.env` with the
   non-secret settings. It never prints the secret.
+- `pnpm n8n:import` creates the two credentials the workflows use (`LendLoop HMAC secret` from
+  `.n8n-hmac-secret`, and `Mailpit SMTP`), imports the three workflows from [`n8n/`](n8n), sets
+  the error workflow on the other two, publishes all three and restarts n8n. The secret goes to
+  the container on stdin (never printed or on a command line). Safe to run again.
 - `pnpm tunnel` starts the tunnel and points Convex's `N8N_WEBHOOK_URL` at it. The quick-tunnel
   address changes on every start, so run it again after a restart.
 
-In n8n:
+<details>
+<summary>Manual alternative (n8n UI)</summary>
 
 1. **Credentials** (**＋ → Credential**):
    - **Crypto**, named exactly `LendLoop HMAC secret`. **Hmac Secret** = the contents of
@@ -196,10 +202,11 @@ In n8n:
      password.
 2. **Import** each file in [`n8n/`](n8n), error workflow first (**＋ → Workflow → ⋯ → Import JSON**,
    then save): `error-workflow.json`, `request-notification.json`, `overdue-reminders.json`.
-   Credentials link by name.
 3. In **Request notification** and **Overdue reminders**: **⋯ → Settings → Error workflow →
    LendLoop · Error reporter**.
 4. **Publish** all three.
+
+</details>
 
 **Try it:** request a tool from the second account; Mailpit shows "\<name\> wants to borrow your
 \<tool\>" within seconds. Approve it and the borrower gets "… approved your request".
@@ -530,7 +537,7 @@ convex/
   mcp.ts                 MCP rate limit + audit log
   *.test.ts              RBAC + integration tests
 n8n/                     exported workflows (WF1–WF3), no secrets
-scripts/                 n8n:setup, mcp:setup, tunnel
+scripts/                 n8n:setup, n8n:import, mcp:setup, tunnel
 docker-compose.yml       n8n + Mailpit
 ```
 

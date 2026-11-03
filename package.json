@@ -14,6 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "n8n:setup": "node scripts/setup-n8n.mjs",
+    "n8n:import": "node scripts/n8n-import.mjs",
     "mcp:setup": "node scripts/setup-mcp.mjs",
     "tunnel": "node scripts/tunnel.mjs",
     "prepare": "husky",
