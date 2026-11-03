@@ -1,6 +1,8 @@
+import type { UserIdentity } from "convex/server";
 import { ConvexError } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import { env, type QueryCtx } from "../_generated/server";
+import { MCP_TOKEN_ISSUER } from "./mcp";
 
 // Every public query/mutation follows: authenticate → authorise → validate → act.
 // These helpers are the only place identity and permissions are decided.
@@ -11,14 +13,33 @@ const NOT_SIGNED_IN = "Please sign in to continue.";
 const NOT_ALLOWED = "You don't have permission to do that.";
 const NOT_FOUND = "That item doesn't exist or is no longer available.";
 
+/**
+ * Which user row an identity belongs to. Browser sessions come from Clerk
+ * directly. MCP calls (Claude) carry a token from our MCP route whose subject
+ * is the Clerk user id, so they map to the very same row; no second account,
+ * no separate permission path.
+ */
+function userTokenIdentifier(identity: UserIdentity): string | null {
+  if (identity.issuer !== MCP_TOKEN_ISSUER) return identity.tokenIdentifier;
+  const clerkIssuer = env.CLERK_JWT_ISSUER_DOMAIN?.replace(/\/$/, "");
+  return clerkIssuer ? `${clerkIssuer}|${identity.subject}` : null;
+}
+
 /** The caller's user row, or null when signed out / not yet synced. */
 export async function getCurrentUser(ctx: QueryCtx): Promise<Doc<"users"> | null> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
+  const tokenIdentifier = userTokenIdentifier(identity);
+  if (!tokenIdentifier) return null;
   return await ctx.db
     .query("users")
-    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", tokenIdentifier))
     .unique();
+}
+
+/** True when the current call comes from Claude via the MCP route. */
+export async function isMcpCall(ctx: QueryCtx): Promise<boolean> {
+  return (await ctx.auth.getUserIdentity())?.issuer === MCP_TOKEN_ISSUER;
 }
 
 export async function requireUser(ctx: QueryCtx): Promise<Doc<"users">> {

@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./lib/auth";
+import { MCP_TOKEN_ISSUER } from "./lib/mcp";
 import { roleValidator } from "./lib/validators";
 
 /**
@@ -14,6 +15,11 @@ export const store = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Please sign in to continue.");
+    // Accounts are created from the browser session only; Claude (MCP) tokens
+    // map onto an existing row (lib/auth.ts) and must never create a second one.
+    if (identity.issuer === MCP_TOKEN_ISSUER) {
+      throw new ConvexError("Sign in to LendLoop in your browser first.");
+    }
 
     // name/email come from custom claims on the Clerk session token (see README).
     // `||` because Clerk sends "" when a user has no name.

@@ -122,6 +122,16 @@ export default defineSchema({
     .index("by_loanId_and_status", ["loanId", "status"]) // retries shown on the loan
     .index("by_status_and_nextAttemptAt", ["status", "nextAttemptAt"]),
 
+  // One row per tool call Claude makes through the MCP route (audit trail).
+  // Tool name and outcome only; no arguments or free text.
+  mcpAuditLog: defineTable({
+    userId: v.id("users"),
+    tool: v.string(),
+    status: v.union(v.literal("started"), v.literal("ok"), v.literal("error")),
+    error: v.optional(v.string()),
+    durationMs: v.optional(v.number()),
+  }).index("by_userId", ["userId"]),
+
   // HTTP-level log of every call between Convex and n8n (both directions), for
   // the admin "Automation log". No payloads, secrets or emails. Kept 30 days
   // (crons.ts prunes older rows).

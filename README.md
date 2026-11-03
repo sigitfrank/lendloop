@@ -5,7 +5,8 @@
 LendLoop is a neighbourhood tool-lending board. Neighbours list tools they rarely use, others
 request them for a date range, and the lender approves, declines and marks them returned. Email
 notifications and daily overdue reminders run through **n8n**, connected to the app with signed,
-idempotent, retried calls in both directions.
+idempotent, retried calls in both directions. Users can also **connect Claude** (MCP) with
+their own LendLoop sign-in, no API keys, and let it lend and borrow for them.
 
 Built for the Fluence Full-Stack Developer take-home with **Next.js (App Router) + TypeScript,
 Clerk, Convex and n8n**.
@@ -23,10 +24,11 @@ Clerk, Convex and n8n**.
 7. [Security decisions](#security-decisions)
 8. [Data minimisation](#data-minimisation)
 9. [Integration reliability (n8n)](#integration-reliability-n8n)
-10. [Testing](#testing)
-11. [Design decisions and trade-offs](#design-decisions-and-trade-offs)
-12. [Project structure](#project-structure)
-13. [Built with AI assistance](#built-with-ai-assistance)
+10. [Connect Claude (MCP)](#connect-claude-mcp)
+11. [Testing](#testing)
+12. [Design decisions and trade-offs](#design-decisions-and-trade-offs)
+13. [Project structure](#project-structure)
+14. [Built with AI assistance](#built-with-ai-assistance)
 
 Production changes are in [PRODUCTION.md](PRODUCTION.md).
 
@@ -51,6 +53,9 @@ tools (**name and category only**, server-rendered from Convex) and "Sign in to 
   "Request notification retrying (attempt 2 of 5)"). This is the brief's bonus.
 - **Admin:** all loans, remove any listing, mark Trusted Lenders, and an **Automation log** of
   every HTTP call between Convex and n8n (status filter, search, kept 30 days).
+- **Connect Claude:** an MCP server so Claude can search tools, list, request, approve and
+  return as the signed-in user. Sign-in is OAuth in the browser; every action goes through the
+  same permission checks, is rate limited and shows up in "Recent activity".
 
 All lists update live (Convex subscriptions over a WebSocket); there is no refresh button.
 
@@ -122,7 +127,13 @@ on the missing Clerk issuer; set it, then run `pnpm convex dev` again and keep i
 
 ```bash
 pnpm convex env set CLERK_JWT_ISSUER_DOMAIN https://<your-instance>.clerk.accounts.dev
+pnpm mcp:setup
 ```
+
+`pnpm mcp:setup` creates the key pair the MCP route uses to call Convex as the signed-in user
+(see [Connect Claude](#connect-claude-mcp)): the private key goes to `.env.local`
+(`MCP_JWT_PRIVATE_KEY`, never printed), the public key to Convex (`MCP_JWKS`). Convex refuses to
+push until both env vars exist.
 
 ### 4. Run the app
 
@@ -183,10 +194,27 @@ pnpm convex run devSeed:overdueLoan
 
 Run it again: no second email (one reminder per loan per day).
 
-### 6. Tests
+### 6. Connect Claude (MCP)
+
+One-time, in the Clerk dashboard: **Configure → OAuth applications → Settings**, turn on
+**dynamic client registration** (DCR, and CIMD if offered) so Claude can register itself, and
+set the default scopes to `openid profile email`.
+
+Then, signed in to LendLoop, open **Connect Claude** and copy the command, e.g.:
 
 ```bash
-pnpm test        # 30 tests, ~1 s
+claude mcp add --transport http lendloop http://localhost:3000/mcp
+```
+
+In Claude Code run `/mcp`, pick **lendloop**, and sign in with your LendLoop account in the
+browser. Try "find a drill I can borrow this weekend". Claude Desktop and claude.ai connect from
+the internet, so they need the app on a public HTTPS URL (Settings → Connectors → Add custom
+connector).
+
+### 7. Tests
+
+```bash
+pnpm test        # 37 tests, ~1 s
 pnpm typecheck   # generates Next.js route types, then tsc
 pnpm lint
 pnpm format       # Prettier (also runs on every commit via husky + lint-staged)
@@ -209,6 +237,8 @@ No values are committed. `.env*`, `n8n.env` and `.n8n-hmac-secret` are git-ignor
 | `CLERK_JWT_ISSUER_DOMAIN`           | Convex env                             | Issuer Convex trusts for Clerk JWTs           | no      |
 | `LENDLOOP_HMAC_SECRET`              | Convex env + n8n Crypto credential     | Signs/verifies every Convex ↔ n8n request     | **yes** |
 | `N8N_WEBHOOK_URL`                   | Convex env (set by `pnpm tunnel`)      | Where Convex delivers loan events             | no      |
+| `MCP_JWT_PRIVATE_KEY`               | `.env.local` (written by `mcp:setup`)  | Signs the MCP route's 60 s tokens for Convex  | **yes** |
+| `MCP_JWKS`                          | Convex env (set by `mcp:setup`)        | Public key Convex verifies those tokens with  | no      |
 | `LENDLOOP_CONVEX_URL`               | `n8n.env`                              | Base URL n8n calls (`/n8n/*`)                 | no      |
 | `LENDLOOP_APP_URL`                  | `n8n.env`                              | Links in emails                               | no      |
 
@@ -351,9 +381,54 @@ after 30 days by a cron.
 
 ---
 
+## Connect Claude (MCP)
+
+Claude (Claude Code, Desktop or claude.ai) can act on LendLoop **as the signed-in user, under the
+same RBAC**. There are **no API keys**: Claude signs in with the user's LendLoop account in the
+browser (OAuth 2.1 + PKCE, Clerk as the authorisation server).
+
+```
+Claude ── OAuth sign-in in the browser (Clerk) ──► access token
+   │  POST /mcp   Authorization: Bearer <Clerk OAuth token>
+   ▼
+Next.js /mcp   (mcp-handler, stateless Streamable HTTP)
+   │  1. verify the token with Clerk → Clerk user id     (401 + resource metadata if missing)
+   │  2. validate the tool input (zod)
+   │  3. sign a 60-second ES256 token for that user (sub = Clerk user id)
+   ▼
+Convex   (second auth provider, customJwt)
+   │  mcp.startCall    rate limit (60/min, burst 20) + audit row
+   │  the SAME public function the UI calls (requireUser / owner / admin checks)
+   │  mcp.finishCall   ok / error + duration
+```
+
+- **One identity, one permission path.** The token's subject is the Clerk user id;
+  [`convex/lib/auth.ts`](convex/lib/auth.ts) maps it onto the user's existing row. No service
+  account, no bypass, no second permission model. A Claude token can't create a user (sign in to
+  the app once first).
+- **Short-lived and one-way.** Tokens Convex accepts from the route live 60 seconds and are signed
+  with a key only the Next.js server holds; Convex has only the public key. To disconnect:
+  **Clear authentication** in Claude.
+- **Guardrails.** Per-user rate limit (Convex rate-limiter component). Audit log of tool name,
+  outcome and duration (no arguments or free text), shown under **Connect Claude → Recent
+  activity**. Errors reaching Claude are the same user-safe messages as the UI. Tools carry
+  read-only / destructive annotations, and the server instructions ask Claude to confirm before
+  approving, declining or cancelling.
+- **Prompt injection.** Listing names and descriptions are user-written. They return as JSON data
+  fields, and no tool can do more than the user could in the UI.
+- **Data minimisation.** The same views as the UI (first names, no emails).
+
+| Tool                                                                                        | Kind  |
+| ------------------------------------------------------------------------------------------- | ----- |
+| `search_tools`, `list_my_listings`, `list_my_requests`, `list_incoming_requests`            | read  |
+| `create_listing`, `request_borrow`, `cancel_request`, `respond_to_request`, `mark_returned` | write |
+| `admin_list_loans` (Convex refuses non-admins)                                              | admin |
+
+Removing listings, Trusted Lender and roles stay in the UI on purpose.
+
 ## Testing
 
-`pnpm test` runs **30 tests** with [convex-test](https://docs.convex.dev/testing/convex-test),
+`pnpm test` runs **37 tests** with [convex-test](https://docs.convex.dev/testing/convex-test),
 executing the real functions as different users (Alice lends, Bob borrows, Carol is a stranger,
 plus an admin).
 
@@ -368,6 +443,9 @@ plus an admin).
   data minimisation; **idempotent replay** of write-backs; outbox delivery is signed and minimal;
   **5 attempts with backoff then a visible failure**; activity hides error details from loan
   parties; automation log status codes, admin-only access, search and **30-day pruning**.
+- **MCP** ([`convex/mcp.test.ts`](convex/mcp.test.ts)): a Claude token acts as the same user as
+  the browser; unknown users refused; Claude can't create users; can't act on someone else's loan;
+  guardrails only accept MCP tokens; audit rows are per user; per-user rate limit.
 
 ---
 
@@ -402,9 +480,11 @@ plus an admin).
 ## Project structure
 
 ```
-app/                     Next.js routes: / (public), (signed-in)/tools, my/*, admin
+app/                     Next.js routes: / (public), (signed-in)/tools, my/*, admin, connect;
+                         /mcp + .well-known OAuth metadata
 components/              UI (shadcn/ui primitives in components/ui)
 hooks/ lib/              URL state, pagination, labels, list config
+lib/mcp/                 MCP tools; Convex client acting as the signed-in user
 convex/
   schema.ts              tables + indexes
   lib/auth.ts            RBAC helpers
@@ -415,9 +495,10 @@ convex/
   http.ts                signed /n8n/* endpoints
   automation.ts          idempotent write-backs, overdue feed, HTTP log
   crons.ts               log retention
+  mcp.ts                 MCP rate limit + audit log
   *.test.ts              RBAC + integration tests
 n8n/                     exported workflows (WF1–WF3), no secrets
-scripts/                 n8n:setup, tunnel
+scripts/                 n8n:setup, mcp:setup, tunnel
 docker-compose.yml       n8n + Mailpit
 ```
 

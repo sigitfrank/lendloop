@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: "/my/listings", label: "My listings" },
   { href: "/my/requests", label: "My requests" },
   { href: "/my/incoming", label: "Incoming" },
+  { href: "/connect", label: "Connect Claude" },
 ];
 const ADMIN_LINK = { href: "/admin", label: "Admin" };
 

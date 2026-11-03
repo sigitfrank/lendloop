@@ -50,6 +50,25 @@ operations and scale.
 - **Content safety.** Listing text is user-written: moderation and a report-listing flow.
 - **Dependency and secret scanning** in CI (e.g. Dependabot, gitleaks).
 
+## Connect Claude (MCP)
+
+- **Public HTTPS URL.** Claude Desktop and claude.ai connect from the internet, so the hosted app
+  (fixed domain) is required; localhost only works with Claude Code.
+- **Scoped consent.** Separate OAuth scopes for read and write (and admin), so a user can let
+  Claude browse without letting it approve or cancel; check them per tool.
+- **Client allow-list.** Only allow known MCP clients (Clerk CIMD pre-registered clients) instead
+  of open dynamic registration.
+- **Key rotation.** `pnpm mcp:setup --rotate` replaces the route's signing key; in production,
+  publish two keys (old + new `kid`) during the switch, keep the private key in the host's secret
+  store, and rotate on a schedule.
+- **Anomaly alerts** on the MCP audit log (error spikes, rate-limit hits, unusual write volume),
+  a retention cron for it like the automation log, and an admin view across users.
+- **Opaque OAuth tokens.** Dev uses Clerk JWT access tokens (verified locally, valid until they
+  expire). Opaque tokens can be revoked instantly at the cost of a Clerk call per request; switch
+  to them if "disconnect now" must take effect immediately.
+- **Human-in-the-loop** for destructive tools: return a confirmation step (MCP elicitation)
+  before approve/decline/cancel instead of relying on the client to ask.
+
 ## Data and privacy
 
 - **Retention policy** written down and enforced: automation log 30 days (done), n8n executions
@@ -81,4 +100,3 @@ operations and scale.
 - In-app notifications next to email; reminders before the due date, not only after.
 - Pickup and return confirmation by the borrower too, with a dispute flow.
 - Photos for listings (Convex file storage), neighbourhood radius, ratings after a loan.
-- OAuth-based "Connect Claude" (MCP) with Clerk as the authorisation server, if that extra ships.
