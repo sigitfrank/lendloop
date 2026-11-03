@@ -1,0 +1,131 @@
+{
+  "name": "LendLoop · Error reporter",
+  "nodes": [
+    {
+      "id": "48efca7b-d297-4990-be36-db0a6d2c4188",
+      "parameters": {},
+      "name": "When a LendLoop workflow fails",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "id": "445aa22b-83c2-46f7-8975-aef6d032736b",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function signed(method, path, body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  return { method, path, body, timestamp, toSign: `${timestamp}.${method}.${path}.${body}` };\n}\n// Minimal report: which workflow/node failed and why. No item data.\nconst { execution = {}, workflow = {} } = $input.first().json;\nconst body = JSON.stringify({\n  executionId: String(execution.id ?? 'manual-' + Date.now()),\n  workflow: String(workflow.name ?? 'Unknown workflow').slice(0, 200),\n  node: String(execution.lastNodeExecuted ?? 'unknown node').slice(0, 200),\n  message: String(execution.error?.message ?? 'Unknown error').slice(0, 500),\n});\nreturn [{ json: signed('POST', '/n8n/automation-error', body) }];"
+      },
+      "name": "Prepare error report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "id": "2f904546-678e-46e9-a948-122b7453876c",
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.toSign }}",
+        "dataPropertyName": "signature",
+        "encoding": "hex"
+      },
+      "name": "Sign report",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "crypto": {
+          "id": "lendloopHmacSecret",
+          "name": "LendLoop HMAC secret"
+        }
+      }
+    },
+    {
+      "id": "1ae0f6f8-6bb3-4265-a4ad-a8e7f9bb7ba3",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_URL }}{{ $json.path }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}"
+      },
+      "name": "POST automation error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "When a LendLoop workflow fails": {
+      "main": [
+        [
+          {
+            "node": "Prepare error report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare error report": {
+      "main": [
+        [
+          {
+            "node": "Sign report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign report": {
+      "main": [
+        [
+          {
+            "node": "POST automation error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

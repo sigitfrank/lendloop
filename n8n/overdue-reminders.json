@@ -1,0 +1,363 @@
+{
+  "name": "LendLoop · Overdue reminders",
+  "nodes": [
+    {
+      "id": "d726b81c-7252-42f6-96a5-5d46ef837cce",
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "name": "Every day 09:00 UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "id": "97aef882-53e3-4354-9f14-002599fefb67",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function signed(method, path, body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  return { method, path, body, timestamp, toSign: `${timestamp}.${method}.${path}.${body}` };\n}\nreturn [{ json: signed('GET', '/n8n/overdue-loans', '') }];"
+      },
+      "name": "Prepare: fetch overdue loans",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "id": "32e69081-fca1-4e1a-b4d2-a7962961f9e0",
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.toSign }}",
+        "dataPropertyName": "signature",
+        "encoding": "hex"
+      },
+      "name": "Sign request",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "crypto": {
+          "id": "lendloopHmacSecret",
+          "name": "LendLoop HMAC secret"
+        }
+      }
+    },
+    {
+      "id": "9362dae2-d567-439c-99c4-e5934f6a70e7",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.LENDLOOP_CONVEX_URL }}{{ $json.path }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "GET overdue loans",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "28cd0b04-b8b3-468c-ae1f-40000da30fd3",
+      "parameters": {
+        "fieldToSplitOut": "loans",
+        "options": {}
+      },
+      "name": "One item per loan",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "id": "062962dc-3e4f-4b01-9d88-18ff4c73b27e",
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Convex already excluded loans reminded today, so this never double-sends.\nconst loan = $json;\nconst day = new Date(loan.endDate + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });\nreturn {\n  json: {\n    to: loan.borrower.email,\n    subject: `Reminder: the ${loan.toolName} was due back on ${day}`,\n    text: `Hi ${loan.borrower.firstName},\\n\\nThe ${loan.toolName} you borrowed was due back on ${day}. Please return it to its owner, or get in touch with them.`,\n    linkPath: '/my/requests?status=overdue',\n    idempotencyKey: loan.idempotencyKey,\n    loanId: loan.loanId,\n  },\n};"
+      },
+      "name": "Compose reminder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "id": "d32d713c-57c2-4ad8-a92b-85dda06b3b01",
+      "parameters": {
+        "fromEmail": "LendLoop <no-reply@lendloop.local>",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}\n\n{{ $env.LENDLOOP_APP_URL }}{{ $json.linkPath }}\n\n— LendLoop",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send reminder (Mailpit)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "lendloopMailpitSmtp",
+          "name": "Mailpit SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "ed5247e5-ff7b-49a0-b2f0-87c9350ce4a2",
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function signed(method, path, body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  return { method, path, body, timestamp, toSign: `${timestamp}.${method}.${path}.${body}` };\n}\nconst m = $('Compose reminder').item.json;\nconst body = JSON.stringify({ idempotencyKey: m.idempotencyKey, loanId: m.loanId, status: 'sent' });\nreturn { json: signed('POST', '/n8n/reminder-status', body) };"
+      },
+      "name": "Prepare write-back: sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        200
+      ]
+    },
+    {
+      "id": "ef153567-d78e-41ed-a045-b126035741eb",
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function signed(method, path, body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  return { method, path, body, timestamp, toSign: `${timestamp}.${method}.${path}.${body}` };\n}\nconst m = $('Compose reminder').item.json;\nconst detail = String($json.error?.message ?? 'Reminder could not be sent').slice(0, 500);\nconst body = JSON.stringify({ idempotencyKey: m.idempotencyKey, loanId: m.loanId, status: 'failed', detail });\nreturn { json: signed('POST', '/n8n/reminder-status', body) };"
+      },
+      "name": "Prepare write-back: failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        420
+      ]
+    },
+    {
+      "id": "862164c4-0a57-48a4-b4f6-ce454b27de1b",
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.toSign }}",
+        "dataPropertyName": "signature",
+        "encoding": "hex"
+      },
+      "name": "Sign write-back",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ],
+      "credentials": {
+        "crypto": {
+          "id": "lendloopHmacSecret",
+          "name": "LendLoop HMAC secret"
+        }
+      }
+    },
+    {
+      "id": "e81a79d6-2e6e-46b6-bc5e-7982c6dfff78",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_URL }}{{ $json.path }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}"
+      },
+      "name": "POST reminder status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Every day 09:00 UTC": {
+      "main": [
+        [
+          {
+            "node": "Prepare: fetch overdue loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare: fetch overdue loans": {
+      "main": [
+        [
+          {
+            "node": "Sign request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign request": {
+      "main": [
+        [
+          {
+            "node": "GET overdue loans",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET overdue loans": {
+      "main": [
+        [
+          {
+            "node": "One item per loan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One item per loan": {
+      "main": [
+        [
+          {
+            "node": "Compose reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose reminder": {
+      "main": [
+        [
+          {
+            "node": "Send reminder (Mailpit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send reminder (Mailpit)": {
+      "main": [
+        [
+          {
+            "node": "Prepare write-back: sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare write-back: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare write-back: sent": {
+      "main": [
+        [
+          {
+            "node": "Sign write-back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare write-back: failed": {
+      "main": [
+        [
+          {
+            "node": "Sign write-back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign write-back": {
+      "main": [
+        [
+          {
+            "node": "POST reminder status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

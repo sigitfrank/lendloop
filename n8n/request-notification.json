@@ -1,0 +1,578 @@
+{
+  "name": "LendLoop · Request notification",
+  "nodes": [
+    {
+      "id": "6c0bc537-a35d-49de-a4ea-7fd0c205031b",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lendloop-loan-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Loan event (from Convex)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "9e853f76-8c7d-4284-8870-ba94819d5c18"
+    },
+    {
+      "id": "2c068eed-e6a0-4b93-a84e-fa4ece89c369",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Rebuild exactly what Convex signed: \"{timestamp}.POST.{path}.{rawBody}\".\n// Convex sends compact JSON.stringify output, so re-stringifying the parsed\n// body reproduces the same bytes.\nconst { headers, body } = $input.first().json;\nconst timestamp = headers['x-lendloop-timestamp'] ?? '';\nreturn [{\n  json: {\n    event: body,\n    timestamp,\n    receivedSignature: (headers['x-lendloop-signature'] ?? '').toLowerCase(),\n    toSign: `${timestamp}.POST./webhook/lendloop-loan-events.${JSON.stringify(body)}`,\n  },\n}];"
+      },
+      "name": "Build string to verify",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "id": "dacb7ac4-4517-4eb7-9ccd-3f5a3b6dc7cc",
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.toSign }}",
+        "dataPropertyName": "signature",
+        "encoding": "hex"
+      },
+      "name": "Expected signature",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "credentials": {
+        "crypto": {
+          "id": "lendloopHmacSecret",
+          "name": "LendLoop HMAC secret"
+        }
+      }
+    },
+    {
+      "id": "72cc3381-9d79-454d-a356-4f39e034ed22",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Constant-time comparison + 5-minute replay window.\nfunction safeEqual(a, b) {\n  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;\n  let diff = 0;\n  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);\n  return diff === 0;\n}\nconst item = $input.first().json;\nconst age = Math.abs(Math.floor(Date.now() / 1000) - Number(item.timestamp));\nconst valid = safeEqual(item.signature, item.receivedSignature) && Number.isFinite(age) && age <= 300;\nreturn [{ json: { valid, event: item.event } }];"
+      },
+      "name": "Check signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "id": "41a11e72-56d7-4fc2-b4e5-99bc12dbea05",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "7b49f66f-edaf-4690-b084-2e76a5593409",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "id": "d3779395-2e66-4bed-8821-07c7f4122fc4",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"error\":\"invalid signature\"}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "name": "Reject (401)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        460
+      ]
+    },
+    {
+      "id": "c593f424-1359-4f14-b02e-2428841a839f",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"accepted\":true}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "name": "Accept (202)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "id": "d485a283-9fda-417e-9b87-1d71ad82055c",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function signed(method, path, body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  return { method, path, body, timestamp, toSign: `${timestamp}.${method}.${path}.${body}` };\n}\n// Convex may re-deliver an event (at-least-once). Ask whether this\n// notification was already sent, so the email goes out only once.\nconst event = $input.first().json.event;\nconst path = '/n8n/event-status?key=' + encodeURIComponent(event.idempotencyKey);\nreturn [{ json: { event, ...signed('GET', path, '') } }];"
+      },
+      "name": "Prepare: already sent?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        200
+      ]
+    },
+    {
+      "id": "faec8cad-f03e-4d6a-b342-9c302805e418",
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.toSign }}",
+        "dataPropertyName": "signature",
+        "encoding": "hex"
+      },
+      "name": "Sign status check",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        200
+      ],
+      "credentials": {
+        "crypto": {
+          "id": "lendloopHmacSecret",
+          "name": "LendLoop HMAC secret"
+        }
+      }
+    },
+    {
+      "id": "ceaaf441-2c72-4556-883a-c4ab219ca694",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.LENDLOOP_CONVEX_URL }}{{ $json.path }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "GET event status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        200
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    },
+    {
+      "id": "db03be28-f125-4f1f-8deb-5886b4862a8f",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "aa4ad80a-14f5-4832-8f86-e43e5ca8fb2e",
+              "leftValue": "={{ $json.status === 'sent' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Already sent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        200
+      ]
+    },
+    {
+      "id": "c86158cb-089f-462b-ab02-2ace35de426d",
+      "parameters": {},
+      "name": "Skip (already sent)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        80
+      ]
+    },
+    {
+      "id": "75c4856b-35f6-40fc-a722-5f3d914b05e1",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Only the fields this email needs: recipient, tool, dates, first names.\nconst e = $('Prepare: already sent?').first().json.event;\nconst day = (iso) => new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });\nconst dates = `${day(e.loan.startDate)} – ${day(e.loan.endDate)}`;\nconst who = e.otherPartyFirstName;\nconst copy = {\n  pending:   [`${who} wants to borrow your ${e.toolName}`, `${who} asked to borrow your ${e.toolName} for ${dates}. Approve or decline the request:`, '/my/incoming?status=pending'],\n  cancelled: [`${who} cancelled their request`, `${who} cancelled their request to borrow your ${e.toolName} (${dates}).`, '/my/incoming'],\n  approved:  [`${who} approved your request`, `Good news: ${who} approved your request to borrow the ${e.toolName} for ${dates}.`, '/my/requests'],\n  declined:  [`Your request for the ${e.toolName} was declined`, `Your request to borrow the ${e.toolName} for ${dates} was declined.`, '/my/requests'],\n  returned:  [`Thanks for returning the ${e.toolName}`, `${who} marked the ${e.toolName} as returned. Thanks for borrowing responsibly.`, '/my/requests'],\n}[e.status];\nreturn [{\n  json: {\n    to: e.recipient.email,\n    subject: copy[0],\n    text: `Hi ${e.recipient.firstName},\\n\\n${copy[1]}`,\n    linkPath: copy[2],\n    idempotencyKey: e.idempotencyKey,\n    loanId: e.loan.id,\n  },\n}];"
+      },
+      "name": "Compose email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "id": "c779e6f7-82bf-40e7-adf5-3a694cc24323",
+      "parameters": {
+        "fromEmail": "LendLoop <no-reply@lendloop.local>",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}\n\n{{ $env.LENDLOOP_APP_URL }}{{ $json.linkPath }}\n\n— LendLoop",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send email (Mailpit)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2420,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "lendloopMailpitSmtp",
+          "name": "Mailpit SMTP"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "1367d5e8-2c20-4ef3-aac3-e5ec5a0c06e2",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function signed(method, path, body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  return { method, path, body, timestamp, toSign: `${timestamp}.${method}.${path}.${body}` };\n}\nconst m = $('Compose email').first().json;\nconst body = JSON.stringify({ idempotencyKey: m.idempotencyKey, loanId: m.loanId, status: 'sent' });\nreturn [{ json: signed('POST', '/n8n/notification-status', body) }];"
+      },
+      "name": "Prepare write-back: sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        200
+      ]
+    },
+    {
+      "id": "9e45190a-2d15-49e8-a859-43a7ae4a8d69",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function signed(method, path, body) {\n  const timestamp = String(Math.floor(Date.now() / 1000));\n  return { method, path, body, timestamp, toSign: `${timestamp}.${method}.${path}.${body}` };\n}\nconst m = $('Compose email').first().json;\nconst detail = String($input.first().json.error?.message ?? 'Email could not be sent').slice(0, 500);\nconst body = JSON.stringify({ idempotencyKey: m.idempotencyKey, loanId: m.loanId, status: 'failed', detail });\nreturn [{ json: signed('POST', '/n8n/notification-status', body) }];"
+      },
+      "name": "Prepare write-back: failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        420
+      ]
+    },
+    {
+      "id": "2a47d795-f778-4699-bf9c-a73e482b0788",
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA256",
+        "value": "={{ $json.toSign }}",
+        "dataPropertyName": "signature",
+        "encoding": "hex"
+      },
+      "name": "Sign write-back",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ],
+      "credentials": {
+        "crypto": {
+          "id": "lendloopHmacSecret",
+          "name": "LendLoop HMAC secret"
+        }
+      }
+    },
+    {
+      "id": "c542c097-ca00-448e-8770-9449d481f843",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LENDLOOP_CONVEX_URL }}{{ $json.path }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-LendLoop-Timestamp",
+              "value": "={{ $json.timestamp }}"
+            },
+            {
+              "name": "X-LendLoop-Signature",
+              "value": "={{ $json.signature }}"
+            }
+          ]
+        },
+        "options": {},
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}"
+      },
+      "name": "POST notification status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        300
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "Loan event (from Convex)": {
+      "main": [
+        [
+          {
+            "node": "Build string to verify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build string to verify": {
+      "main": [
+        [
+          {
+            "node": "Expected signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expected signature": {
+      "main": [
+        [
+          {
+            "node": "Check signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check signature": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Accept (202)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject (401)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accept (202)": {
+      "main": [
+        [
+          {
+            "node": "Prepare: already sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare: already sent?": {
+      "main": [
+        [
+          {
+            "node": "Sign status check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign status check": {
+      "main": [
+        [
+          {
+            "node": "GET event status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET event status": {
+      "main": [
+        [
+          {
+            "node": "Already sent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already sent?": {
+      "main": [
+        [
+          {
+            "node": "Skip (already sent)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compose email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose email": {
+      "main": [
+        [
+          {
+            "node": "Send email (Mailpit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email (Mailpit)": {
+      "main": [
+        [
+          {
+            "node": "Prepare write-back: sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare write-back: failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare write-back: sent": {
+      "main": [
+        [
+          {
+            "node": "Sign write-back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare write-back: failed": {
+      "main": [
+        [
+          {
+            "node": "Sign write-back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign write-back": {
+      "main": [
+        [
+          {
+            "node": "POST notification status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
