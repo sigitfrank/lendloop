@@ -39,10 +39,10 @@ export function AdminAutomationLog({ filter, search }: { filter: string; search?
           search
             ? "Try a path, a tool name, a status code or a word from the error."
             : filter === "all"
-            ? "Nothing has been exchanged with n8n in the last 30 days."
-            : filter === "workflow-errors"
-              ? "n8n hasn't reported any failed workflow runs in the last 30 days."
-              : "No requests with this status in the last 30 days."
+              ? "Nothing has been exchanged with n8n in the last 30 days."
+              : filter === "workflow-errors"
+                ? "n8n hasn't reported any failed workflow runs in the last 30 days."
+                : "No requests with this status in the last 30 days."
         }
       />
     );
@@ -55,7 +55,10 @@ export function AdminAutomationLog({ filter, search }: { filter: string; search?
       </p>
       <ul className="divide-y rounded-xl border bg-card">
         {results.map((row) => (
-          <li key={row._id} className="flex flex-col gap-1.5 p-3 sm:flex-row sm:items-start sm:gap-4">
+          <li
+            key={row._id}
+            className="flex flex-col gap-1.5 p-3 sm:flex-row sm:items-start sm:gap-4"
+          >
             <Badge className={cn("w-12 justify-center font-mono", statusTone(row.statusCode))}>
               {row.statusCode === 0 ? "ERR" : row.statusCode}
             </Badge>
@@ -72,9 +75,13 @@ export function AdminAutomationLog({ filter, search }: { filter: string; search?
                 {row.isWorkflowError && (
                   <Badge className="bg-danger/10 text-danger">n8n workflow error</Badge>
                 )}
-                {row.toolName && <span className="text-xs text-muted-foreground">· {row.toolName}</span>}
+                {row.toolName && (
+                  <span className="text-xs text-muted-foreground">· {row.toolName}</span>
+                )}
               </p>
-              {row.detail && <p className="text-xs wrap-break-word text-muted-foreground">{row.detail}</p>}
+              {row.detail && (
+                <p className="text-xs wrap-break-word text-muted-foreground">{row.detail}</p>
+              )}
             </div>
             <div className="flex shrink-0 gap-3 text-xs text-muted-foreground sm:flex-col sm:items-end sm:gap-0">
               <span>{timeAgo(row._creationTime, now)}</span>

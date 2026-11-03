@@ -141,7 +141,9 @@ function SortMenu({ options, searching }: { options: ListOption[]; searching: bo
         <DropdownMenuLabel>{searching ? "Sorted by best match" : "Sort by"}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={searching ? "" : current}
-          onValueChange={(value) => update({ sort: value === options[0].value ? undefined : value })}
+          onValueChange={(value) =>
+            update({ sort: value === options[0].value ? undefined : value })
+          }
         >
           {options.map((option) => (
             <DropdownMenuRadioItem key={option.value} value={option.value} disabled={searching}>
@@ -165,7 +167,11 @@ function ViewSwitch() {
   const view = params.get("view") === "table" ? "table" : "grid";
 
   return (
-    <div role="group" aria-label="View" className="hidden h-9 items-center rounded-lg border bg-card p-0.5 sm:flex">
+    <div
+      role="group"
+      aria-label="View"
+      className="hidden h-9 items-center rounded-lg border bg-card p-0.5 sm:flex"
+    >
       {VIEWS.map(({ value, label, icon: Icon }) => (
         <Tooltip key={value}>
           <TooltipTrigger asChild>

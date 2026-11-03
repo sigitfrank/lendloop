@@ -38,7 +38,10 @@ export const LOAN_PAGE_SIZE = 12;
 /** Empty-state title + description for a loan list, given search and filter. */
 export function emptyCopy({ q, filter, all }: { q?: string; filter: LoanFilter; all: string }) {
   if (q) {
-    return { title: `Nothing matches “${q}”`, description: "Try a tool name or a person's first name." };
+    return {
+      title: `Nothing matches “${q}”`,
+      description: "Try a tool name or a person's first name.",
+    };
   }
   if (filter === "all") return { title: "No requests yet", description: all };
   return { title: "Nothing here", description: "No requests with this status." };
@@ -134,9 +137,7 @@ function PagedLoanTable({ query, side, renderActions }: BodyProps) {
                     <TableCell>
                       <LoanStatusBadge status={loan.status} overdue={loan.overdue} />
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {lastUpdate(loan, now)}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{lastUpdate(loan, now)}</TableCell>
                     <TableCell className="max-w-64">
                       {loan.activity.length > 0 ? (
                         <LoanActivity items={loan.activity} now={now} limit={1} />
@@ -161,7 +162,11 @@ function PagedLoanTable({ query, side, renderActions }: BodyProps) {
   );
 }
 
-function LoanCardGrid({ loans, side, renderActions }: { loans: LoanView[] } & Omit<BodyProps, "query">) {
+function LoanCardGrid({
+  loans,
+  side,
+  renderActions,
+}: { loans: LoanView[] } & Omit<BodyProps, "query">) {
   const now = useNow();
 
   return (

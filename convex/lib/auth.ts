@@ -17,9 +17,7 @@ export async function getCurrentUser(ctx: QueryCtx): Promise<Doc<"users"> | null
   if (!identity) return null;
   return await ctx.db
     .query("users")
-    .withIndex("by_tokenIdentifier", (q) =>
-      q.eq("tokenIdentifier", identity.tokenIdentifier),
-    )
+    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
     .unique();
 }
 
@@ -36,10 +34,7 @@ export async function requireAdmin(ctx: QueryCtx): Promise<Doc<"users">> {
 }
 
 /** An active (not removed) tool, regardless of owner. */
-export async function getActiveTool(
-  ctx: QueryCtx,
-  toolId: Id<"tools">,
-): Promise<Doc<"tools">> {
+export async function getActiveTool(ctx: QueryCtx, toolId: Id<"tools">): Promise<Doc<"tools">> {
   const tool = await ctx.db.get("tools", toolId);
   if (!tool || tool.removedAt !== undefined) throw new ConvexError(NOT_FOUND);
   return tool;

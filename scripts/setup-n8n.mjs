@@ -34,7 +34,9 @@ function readEnvFile(path) {
 
 const convexUrl = readEnvFile(".env.local").NEXT_PUBLIC_CONVEX_SITE_URL;
 if (!convexUrl) {
-  console.error("NEXT_PUBLIC_CONVEX_SITE_URL is missing from .env.local. Run `pnpm convex dev` once first.");
+  console.error(
+    "NEXT_PUBLIC_CONVEX_SITE_URL is missing from .env.local. Run `pnpm convex dev` once first.",
+  );
   process.exit(1);
 }
 
@@ -51,7 +53,10 @@ if (!setConvexEnv("LENDLOOP_HMAC_SECRET", secret)) {
 }
 writeFileSync(SECRET_FILE, secret + "\n");
 
-const appUrl = (appUrlArg ?? current.LENDLOOP_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const appUrl = (appUrlArg ?? current.LENDLOOP_APP_URL ?? "http://localhost:3000").replace(
+  /\/$/,
+  "",
+);
 writeFileSync(
   N8N_ENV,
   [
@@ -65,7 +70,8 @@ writeFileSync(
 
 const fresh = rotate || !existingSecret;
 console.log(`✔ HMAC secret ${fresh ? "generated" : "kept"} (not shown) → Convex + ${SECRET_FILE}`);
-if (fresh) console.log(`  Paste it into the n8n credential "LendLoop HMAC secret" (Hmac Secret field).`);
+if (fresh)
+  console.log(`  Paste it into the n8n credential "LendLoop HMAC secret" (Hmac Secret field).`);
 console.log(`✔ n8n.env: LENDLOOP_CONVEX_URL=${convexUrl}`);
 console.log(`✔ n8n.env: LENDLOOP_APP_URL=${appUrl}`);
 console.log("Next: docker compose up -d, then pnpm tunnel");

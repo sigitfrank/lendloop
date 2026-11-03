@@ -43,12 +43,16 @@ export function ToolTable({
                   <div className="min-w-0">
                     <div className="font-medium">{tool.name}</div>
                     {tool.description && (
-                      <div className="truncate text-xs text-muted-foreground">{tool.description}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {tool.description}
+                      </div>
                     )}
                   </div>
                 </div>
               </TableCell>
-              <TableCell className="text-muted-foreground">{categoryLabel(tool.category)}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {categoryLabel(tool.category)}
+              </TableCell>
               <TableCell>
                 <ConditionMeter condition={tool.condition} />
               </TableCell>

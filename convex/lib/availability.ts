@@ -22,9 +22,7 @@ export async function getAvailability(
 ): Promise<Availability> {
   const approved = await ctx.db
     .query("loans")
-    .withIndex("by_toolId_and_status", (q) =>
-      q.eq("toolId", toolId).eq("status", "approved"),
-    )
+    .withIndex("by_toolId_and_status", (q) => q.eq("toolId", toolId).eq("status", "approved"))
     .take(MAX_APPROVED_PER_TOOL);
 
   const bookings = approved

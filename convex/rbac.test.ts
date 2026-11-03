@@ -193,15 +193,13 @@ describe("admin", () => {
     const { bob, toolId } = await setup();
     const bobId = (await bob.query(api.users.current, {}))!._id;
 
-    await expect(
-      bob.query(api.admin.loans, { paginationOpts: page, today }),
-    ).rejects.toThrowError(NOT_ALLOWED);
+    await expect(bob.query(api.admin.loans, { paginationOpts: page, today })).rejects.toThrowError(
+      NOT_ALLOWED,
+    );
     await expect(bob.query(api.admin.users, { paginationOpts: page })).rejects.toThrowError(
       NOT_ALLOWED,
     );
-    await expect(bob.mutation(api.admin.removeTool, { toolId })).rejects.toThrowError(
-      NOT_ALLOWED,
-    );
+    await expect(bob.mutation(api.admin.removeTool, { toolId })).rejects.toThrowError(NOT_ALLOWED);
     await expect(
       bob.mutation(api.admin.setTrustedLender, { userId: bobId, trusted: true }),
     ).rejects.toThrowError(NOT_ALLOWED);
@@ -231,7 +229,12 @@ describe("admin", () => {
 
   test("roles change only through the internal setRole (CLI), and new users are 'user'", async () => {
     const { t, carol } = await setup();
-    const fresh = t.withIdentity({ tokenIdentifier: "test|dave", subject: "dave", issuer: "test", email: "dave@example.com" });
+    const fresh = t.withIdentity({
+      tokenIdentifier: "test|dave",
+      subject: "dave",
+      issuer: "test",
+      email: "dave@example.com",
+    });
     await fresh.mutation(api.users.store, {});
     expect((await fresh.query(api.users.current, {}))?.role).toBe("user");
 
@@ -243,7 +246,12 @@ describe("admin", () => {
 describe("tool icons", () => {
   test("an icon can be set, cleared on edit, and must come from the allowed set", async () => {
     const { t, alice, toolId } = await setup();
-    const fields = { name: "Cordless drill", category: "power_tools" as const, condition: "good" as const, description: "" };
+    const fields = {
+      name: "Cordless drill",
+      category: "power_tools" as const,
+      condition: "good" as const,
+      description: "",
+    };
 
     await alice.mutation(api.tools.update, { toolId, ...fields, icon: "drill" });
     expect((await t.run((ctx) => ctx.db.get(toolId)))?.icon).toBe("drill");

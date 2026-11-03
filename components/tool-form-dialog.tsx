@@ -175,7 +175,10 @@ export function ToolFormDialog({
             </FormField>
 
             <FormField id="tool-condition" label="Condition" required error={fieldErrors.condition}>
-              <Select value={values.condition} onValueChange={(v) => set("condition", v as Condition)}>
+              <Select
+                value={values.condition}
+                onValueChange={(v) => set("condition", v as Condition)}
+              >
                 <SelectTrigger
                   id="tool-condition"
                   className="w-full"
@@ -208,15 +211,13 @@ export function ToolFormDialog({
                   Clear
                 </button>
               ) : (
-                <span className="text-xs text-muted-foreground">Optional · defaults to the category</span>
+                <span className="text-xs text-muted-foreground">
+                  Optional · defaults to the category
+                </span>
               )
             }
           >
-            <IconPicker
-              id="tool-icon"
-              value={values.icon}
-              onChange={(icon) => set("icon", icon)}
-            />
+            <IconPicker id="tool-icon" value={values.icon} onChange={(icon) => set("icon", icon)} />
           </FormField>
 
           <FormField

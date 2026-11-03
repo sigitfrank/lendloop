@@ -17,8 +17,8 @@ export default async function Home() {
           Borrow what you need. Lend what you don&apos;t.
         </h1>
         <p className="max-w-xl text-lg text-muted-foreground">
-          LendLoop is a neighbourhood board for sharing tools: drills, ladders, tents,
-          stand mixers. Fewer things bought, more things used.
+          LendLoop is a neighbourhood board for sharing tools: drills, ladders, tents, stand mixers.
+          Fewer things bought, more things used.
         </p>
         <Suspense>
           <Show when="signed-out">

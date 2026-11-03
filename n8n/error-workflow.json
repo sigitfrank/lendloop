@@ -7,10 +7,7 @@
       "name": "When a LendLoop workflow fails",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
-      "position": [
-        0,
-        300
-      ]
+      "position": [0, 300]
     },
     {
       "id": "445aa22b-83c2-46f7-8975-aef6d032736b",
@@ -21,10 +18,7 @@
       "name": "Prepare error report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        220,
-        300
-      ]
+      "position": [220, 300]
     },
     {
       "id": "2f904546-678e-46e9-a948-122b7453876c",
@@ -38,10 +32,7 @@
       "name": "Sign report",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 2,
-      "position": [
-        440,
-        300
-      ],
+      "position": [440, 300],
       "credentials": {
         "crypto": {
           "id": "lendloopHmacSecret",
@@ -76,10 +67,7 @@
       "name": "POST automation error",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        660,
-        300
-      ],
+      "position": [660, 300],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000

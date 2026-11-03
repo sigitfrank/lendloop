@@ -115,9 +115,7 @@ export function cleanToolText(input: { name: string; description: string }) {
     throw new ConvexError(`Name must be at most ${TOOL_NAME_MAX} characters.`);
   }
   if (description.length > TOOL_DESCRIPTION_MAX) {
-    throw new ConvexError(
-      `Description must be at most ${TOOL_DESCRIPTION_MAX} characters.`,
-    );
+    throw new ConvexError(`Description must be at most ${TOOL_DESCRIPTION_MAX} characters.`);
   }
   return { name, description };
 }

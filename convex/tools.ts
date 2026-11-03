@@ -38,21 +38,14 @@ const toolCardValidator = v.object({
   availability: availabilityValidator,
 });
 
-async function toToolCard(
-  ctx: QueryCtx,
-  tool: Doc<"tools">,
-  viewerId: Id<"users">,
-  today: string,
-) {
+async function toToolCard(ctx: QueryCtx, tool: Doc<"tools">, viewerId: Id<"users">, today: string) {
   const owner = await ctx.db.get("users", tool.ownerId);
   const isOwn = tool.ownerId === viewerId;
   const pending = isOwn
     ? []
     : await ctx.db
         .query("loans")
-        .withIndex("by_toolId_and_status", (q) =>
-          q.eq("toolId", tool._id).eq("status", "pending"),
-        )
+        .withIndex("by_toolId_and_status", (q) => q.eq("toolId", tool._id).eq("status", "pending"))
         .take(MAX_PENDING_CHECKED);
   return {
     _id: tool._id,
@@ -143,9 +136,7 @@ const listArgs = {
  */
 export const listPublic = query({
   args: {},
-  returns: v.array(
-    v.object({ _id: v.id("tools"), name: v.string(), category: categoryValidator }),
-  ),
+  returns: v.array(v.object({ _id: v.id("tools"), name: v.string(), category: categoryValidator })),
   handler: async (ctx) => {
     const tools = await activeTools(ctx, {}, "newest", undefined).take(PUBLIC_LIST_LIMIT);
     return tools.map(({ _id, name, category }) => ({ _id, name, category }));
@@ -243,15 +234,11 @@ export const remove = mutation({
     const hasLoanIn = async (status: "approved" | "pending") =>
       (await ctx.db
         .query("loans")
-        .withIndex("by_toolId_and_status", (q) =>
-          q.eq("toolId", toolId).eq("status", status),
-        )
+        .withIndex("by_toolId_and_status", (q) => q.eq("toolId", toolId).eq("status", status))
         .first()) !== null;
 
     if (await hasLoanIn("approved")) {
-      throw new ConvexError(
-        "This tool has an approved loan. Mark it returned before deleting it.",
-      );
+      throw new ConvexError("This tool has an approved loan. Mark it returned before deleting it.");
     }
     if (await hasLoanIn("pending")) {
       throw new ConvexError(

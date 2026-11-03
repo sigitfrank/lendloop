@@ -56,15 +56,15 @@ All lists update live (Convex subscriptions over a WebSocket); there is no refre
 
 ## Stack and why
 
-| Layer | Tool | Why |
-|---|---|---|
-| Framework | Next.js 16 (App Router), TypeScript | Required. Server components for the shell, client components only where interactive. |
-| Auth | Clerk (Core 3) | Required. Convex trusts Clerk's JWT (`aud: "convex"`). |
-| Data + backend | Convex | Required. Typed queries/mutations, transactions, scheduler, crons, HTTP actions, search indexes. |
-| Automation | n8n 3.1 (Docker) | Required. Request notifications, daily reminders, error workflow. |
-| UI | Tailwind 4 + shadcn/ui (Radix), lucide icons | Accessible primitives (dialogs, menus, calendar) without hand-rolling them. |
-| Local email | Mailpit (Docker) | A local inbox, so notifications are visible without an email provider. |
-| Tests | Vitest + convex-test | Runs the real Convex functions as different users. |
+| Layer          | Tool                                         | Why                                                                                              |
+| -------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Framework      | Next.js 16 (App Router), TypeScript          | Required. Server components for the shell, client components only where interactive.             |
+| Auth           | Clerk (Core 3)                               | Required. Convex trusts Clerk's JWT (`aud: "convex"`).                                           |
+| Data + backend | Convex                                       | Required. Typed queries/mutations, transactions, scheduler, crons, HTTP actions, search indexes. |
+| Automation     | n8n 3.1 (Docker)                             | Required. Request notifications, daily reminders, error workflow.                                |
+| UI             | Tailwind 4 + shadcn/ui (Radix), lucide icons | Accessible primitives (dialogs, menus, calendar) without hand-rolling them.                      |
+| Local email    | Mailpit (Docker)                             | A local inbox, so notifications are visible without an email provider.                           |
+| Tests          | Vitest + convex-test                         | Runs the real Convex functions as different users.                                               |
 
 **Deliberately not used:** no Redux/Zustand/React Query. Convex `useQuery` is already a live,
 cached source of truth; list state (search, filters, sort, view) lives in the URL. No Redis or
@@ -187,7 +187,9 @@ Run it again: no second email (one reminder per loan per day).
 
 ```bash
 pnpm test        # 30 tests, ~1 s
+pnpm typecheck   # generates Next.js route types, then tsc
 pnpm lint
+pnpm format       # Prettier (also runs on every commit via husky + lint-staged)
 ```
 
 ---
@@ -197,18 +199,18 @@ pnpm lint
 No values are committed. `.env*`, `n8n.env` and `.n8n-hmac-secret` are git-ignored;
 [`.env.example`](.env.example) and [`n8n.env.example`](n8n.env.example) list the names.
 
-| Name | Where | Purpose | Secret |
-|---|---|---|---|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `.env.local` | Clerk in the browser | no |
-| `CLERK_SECRET_KEY` | `.env.local` | Clerk on the Next.js server | **yes** |
-| `CONVEX_DEPLOYMENT` | `.env.local` (written by `convex dev`) | Which deployment the CLI targets | no |
-| `NEXT_PUBLIC_CONVEX_URL` | `.env.local` (written by `convex dev`) | Convex client URL | no |
-| `NEXT_PUBLIC_CONVEX_SITE_URL` | `.env.local` (written by `convex dev`) | Convex HTTP actions URL (used by `n8n:setup`) | no |
-| `CLERK_JWT_ISSUER_DOMAIN` | Convex env | Issuer Convex trusts for Clerk JWTs | no |
-| `LENDLOOP_HMAC_SECRET` | Convex env + n8n Crypto credential | Signs/verifies every Convex ↔ n8n request | **yes** |
-| `N8N_WEBHOOK_URL` | Convex env (set by `pnpm tunnel`) | Where Convex delivers loan events | no |
-| `LENDLOOP_CONVEX_URL` | `n8n.env` | Base URL n8n calls (`/n8n/*`) | no |
-| `LENDLOOP_APP_URL` | `n8n.env` | Links in emails | no |
+| Name                                | Where                                  | Purpose                                       | Secret  |
+| ----------------------------------- | -------------------------------------- | --------------------------------------------- | ------- |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `.env.local`                           | Clerk in the browser                          | no      |
+| `CLERK_SECRET_KEY`                  | `.env.local`                           | Clerk on the Next.js server                   | **yes** |
+| `CONVEX_DEPLOYMENT`                 | `.env.local` (written by `convex dev`) | Which deployment the CLI targets              | no      |
+| `NEXT_PUBLIC_CONVEX_URL`            | `.env.local` (written by `convex dev`) | Convex client URL                             | no      |
+| `NEXT_PUBLIC_CONVEX_SITE_URL`       | `.env.local` (written by `convex dev`) | Convex HTTP actions URL (used by `n8n:setup`) | no      |
+| `CLERK_JWT_ISSUER_DOMAIN`           | Convex env                             | Issuer Convex trusts for Clerk JWTs           | no      |
+| `LENDLOOP_HMAC_SECRET`              | Convex env + n8n Crypto credential     | Signs/verifies every Convex ↔ n8n request     | **yes** |
+| `N8N_WEBHOOK_URL`                   | Convex env (set by `pnpm tunnel`)      | Where Convex delivers loan events             | no      |
+| `LENDLOOP_CONVEX_URL`               | `n8n.env`                              | Base URL n8n calls (`/n8n/*`)                 | no      |
+| `LENDLOOP_APP_URL`                  | `n8n.env`                              | Links in emails                               | no      |
 
 Convex variables are declared and typed in [`convex/convex.config.ts`](convex/convex.config.ts).
 
@@ -263,18 +265,18 @@ Enforced inside Convex functions through shared helpers in
 `requireLoanParty`). The Next.js redirect for signed-out users and the admin page's server-side
 404 are UX on top, not the security boundary.
 
-| Action | Who | Extra checks |
-|---|---|---|
-| Public tool list | anyone | active tools only; returns `name` + `category` only |
-| Browse with availability | signed in | |
-| Create a listing | user | owner is always the caller, never a client-supplied id |
-| Edit / delete a listing | owner | delete is a soft delete, blocked while a loan is pending or approved |
-| Request to borrow | user | not own tool; tool active; start ≥ today, end ≥ start, ≤ 30 days; one pending request per tool; no overlap with an approved loan |
-| Cancel a request | borrower | only while pending |
-| Approve / decline | tool owner | only pending; approve re-checks overlap **in the same transaction**; start date not passed |
-| Mark returned | tool owner | only approved (the lender confirms they got it back) |
-| View all loans, remove any listing, Trusted Lender, users, automation log | admin | role read from the users table on every call |
-| Change a role | CLI only | `users:setRole` is an **internal** function; the browser can't call it |
+| Action                                                                    | Who        | Extra checks                                                                                                                     |
+| ------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Public tool list                                                          | anyone     | active tools only; returns `name` + `category` only                                                                              |
+| Browse with availability                                                  | signed in  |                                                                                                                                  |
+| Create a listing                                                          | user       | owner is always the caller, never a client-supplied id                                                                           |
+| Edit / delete a listing                                                   | owner      | delete is a soft delete, blocked while a loan is pending or approved                                                             |
+| Request to borrow                                                         | user       | not own tool; tool active; start ≥ today, end ≥ start, ≤ 30 days; one pending request per tool; no overlap with an approved loan |
+| Cancel a request                                                          | borrower   | only while pending                                                                                                               |
+| Approve / decline                                                         | tool owner | only pending; approve re-checks overlap **in the same transaction**; start date not passed                                       |
+| Mark returned                                                             | tool owner | only approved (the lender confirms they got it back)                                                                             |
+| View all loans, remove any listing, Trusted Lender, users, automation log | admin      | role read from the users table on every call                                                                                     |
+| Change a role                                                             | CLI only   | `users:setRole` is an **internal** function; the browser can't call it                                                           |
 
 New users always start as `user`. The role lives in Convex, never in the client or Clerk metadata.
 Loans that belong to someone else return the same "doesn't exist" error as missing ones, so their
@@ -306,16 +308,16 @@ existence isn't revealed.
 
 ## Data minimisation
 
-| Data flow | Contains | Deliberately excluded |
-|---|---|---|
-| Public tool list | tool id, name, category | owner, description, availability |
-| Tool cards (signed in) | tool fields, availability, lender's **first name**, Trusted Lender flag | emails, other borrowers |
-| Loan views | dates, status, tool, **first names** of lender and borrower, activity status | emails; error details (admins only) |
-| Convex → n8n webhook | event, status, loan id + dates, tool name, **recipient's** first name + email, other party's first name | description, the other party's email, any other user |
-| `GET /n8n/overdue-loans` | loan id, tool name, end date, **borrower's** first name + email, idempotency key | lender's email, description |
-| Error reports from n8n | workflow, node, message, execution id | item data |
-| Automation log | method, path, status, duration, tool name, short message | payloads, emails, secrets |
-| Clerk session token | `name`, `email` claims | only used to keep the user's own row current |
+| Data flow                | Contains                                                                                                | Deliberately excluded                                |
+| ------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Public tool list         | tool id, name, category                                                                                 | owner, description, availability                     |
+| Tool cards (signed in)   | tool fields, availability, lender's **first name**, Trusted Lender flag                                 | emails, other borrowers                              |
+| Loan views               | dates, status, tool, **first names** of lender and borrower, activity status                            | emails; error details (admins only)                  |
+| Convex → n8n webhook     | event, status, loan id + dates, tool name, **recipient's** first name + email, other party's first name | description, the other party's email, any other user |
+| `GET /n8n/overdue-loans` | loan id, tool name, end date, **borrower's** first name + email, idempotency key                        | lender's email, description                          |
+| Error reports from n8n   | workflow, node, message, execution id                                                                   | item data                                            |
+| Automation log           | method, path, status, duration, tool name, short message                                                | payloads, emails, secrets                            |
+| Clerk session token      | `name`, `email` claims                                                                                  | only used to keep the user's own row current         |
 
 n8n's own execution history contains recipient emails, so **n8n prunes executions after 7 days**
 (`EXECUTIONS_DATA_PRUNE`, `EXECUTIONS_DATA_MAX_AGE=168`), and the Convex automation log is pruned
@@ -339,6 +341,7 @@ after 30 days by a cron.
 
   Write-backs upsert by key: replaying returns `duplicate: true` and changes nothing; "sent" is
   never downgraded. Verified by tests and by re-running WF2 by hand.
+
 - **n8n side:** every HTTP node retries 3× (3 s apart); email nodes route failures to a
   "write-back: failed" branch; **WF3** (error workflow) reports any failed execution to Convex.
 - **Visibility.** Each loan's timeline shows sent / failed / retrying. **Admin → Automation log**

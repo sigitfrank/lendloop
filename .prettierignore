@@ -1,0 +1,4 @@
+# Generated or managed by tools
+convex/_generated
+pnpm-lock.yaml
+.next

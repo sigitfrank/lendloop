@@ -86,10 +86,7 @@ export const loanListArgs = {
 };
 
 /** Whose loans: one lender's, one borrower's, or everyone's (admin). */
-export type LoanScope =
-  | { ownerId: Id<"users"> }
-  | { borrowerId: Id<"users"> }
-  | "all";
+export type LoanScope = { ownerId: Id<"users"> } | { borrowerId: Id<"users"> } | "all";
 
 type LoanQuery = OrderedQuery<DataModel["loans"]>;
 
@@ -110,9 +107,7 @@ function indexedLoans(
         ? loans.withIndex("by_status_and_startDate", (q) => q.eq("status", status)).order(order)
         : loans.withIndex("by_status", (q) => q.eq("status", status)).order(order);
     }
-    return byStart
-      ? loans.withIndex("by_startDate").order(order)
-      : loans.order(order); // default creation-time order
+    return byStart ? loans.withIndex("by_startDate").order(order) : loans.order(order); // default creation-time order
   }
 
   if ("ownerId" in scope) {
@@ -166,7 +161,12 @@ function indexedLoans(
 export function loansQuery(
   ctx: QueryCtx,
   scope: LoanScope,
-  { filter, sort, search, today }: { filter: LoanFilter; sort: LoanSort; search?: string; today: string },
+  {
+    filter,
+    sort,
+    search,
+    today,
+  }: { filter: LoanFilter; sort: LoanSort; search?: string; today: string },
 ): LoanQuery {
   const status: LoanStatus | undefined =
     filter === "all" ? undefined : filter === "overdue" ? "approved" : filter;

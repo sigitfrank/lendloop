@@ -11,7 +11,13 @@ import { api } from "@/convex/_generated/api";
 import { useToday } from "@/hooks/use-today";
 import type { ListParams } from "@/lib/list-params";
 
-export function MyListings({ params, addButton }: { params: ListParams; addButton: React.ReactNode }) {
+export function MyListings({
+  params,
+  addButton,
+}: {
+  params: ListParams;
+  addButton: React.ReactNode;
+}) {
   const today = useToday();
   const { q, sort, view } = params;
   const query = usePaginatedQuery(

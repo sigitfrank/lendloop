@@ -26,7 +26,11 @@ export function IconButton({
           variant="ghost"
           size="icon"
           aria-label={label}
-          className={tone === "danger" ? "text-destructive hover:bg-destructive/10 hover:text-destructive" : undefined}
+          className={
+            tone === "danger"
+              ? "text-destructive hover:bg-destructive/10 hover:text-destructive"
+              : undefined
+          }
           {...props}
         >
           <Icon aria-hidden />

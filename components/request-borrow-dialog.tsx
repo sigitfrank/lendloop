@@ -103,8 +103,8 @@ export function RequestBorrowDialog({ tool }: { tool: ToolCardData }) {
         <DialogHeader>
           <DialogTitle>Borrow “{tool.name}”</DialogTitle>
           <DialogDescription>
-            Pick the first and last day you need it (up to {MAX_LOAN_DAYS} days). Greyed-out
-            days are already booked. {lender} will approve or decline.
+            Pick the first and last day you need it (up to {MAX_LOAN_DAYS} days). Greyed-out days
+            are already booked. {lender} will approve or decline.
           </DialogDescription>
         </DialogHeader>
 

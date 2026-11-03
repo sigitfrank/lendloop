@@ -34,9 +34,7 @@ export const overdueLoans = internalQuery({
   handler: async (ctx, { today }) => {
     const loans = await ctx.db
       .query("loans")
-      .withIndex("by_status_and_endDate", (q) =>
-        q.eq("status", "approved").lt("endDate", today),
-      )
+      .withIndex("by_status_and_endDate", (q) => q.eq("status", "approved").lt("endDate", today))
       .take(MAX_OVERDUE_PER_RUN);
 
     const due = [];

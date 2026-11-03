@@ -28,11 +28,7 @@ export function loanLengthDays(startDate: string, endDate: string): number {
  * Validates a requested borrow range against `today` (passed in by the caller,
  * because queries must not read the clock). Throws a user-safe error.
  */
-export function assertValidLoanRange(
-  startDate: string,
-  endDate: string,
-  today: string,
-) {
+export function assertValidLoanRange(startDate: string, endDate: string, today: string) {
   if (parseIsoDate(startDate) === null || parseIsoDate(endDate) === null) {
     throw new ConvexError("Dates must be valid calendar dates.");
   }

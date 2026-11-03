@@ -71,7 +71,9 @@ function TrustedToggle({ user }: { user: AdminUser }) {
     setSaving(true);
     try {
       await setTrusted({ userId: user._id, trusted: next });
-      toast.success(next ? `${user.name} is now a Trusted Lender` : `Removed Trusted Lender from ${user.name}`);
+      toast.success(
+        next ? `${user.name} is now a Trusted Lender` : `Removed Trusted Lender from ${user.name}`,
+      );
     } catch (err) {
       toast.error(errorMessage(err));
     } finally {
@@ -98,13 +100,22 @@ function formatCount(n: number) {
 const STATS = [
   { key: "listings", label: "Listings", unit: "listings", hint: "Tools listed now", icon: Package },
   { key: "lent", label: "Lent", unit: "lent", hint: "Loans returned to them", icon: PackageCheck },
-  { key: "borrowed", label: "Borrowed", unit: "borrowed", hint: "Loans as borrower", icon: ArrowUpRight },
+  {
+    key: "borrowed",
+    label: "Borrowed",
+    unit: "borrowed",
+    hint: "Loans as borrower",
+    icon: ArrowUpRight,
+  },
 ] as const;
 
 /** Compact track record: "2 listings · 1 lent · 0 borrowed". */
 function UserStats({ user }: { user: AdminUser }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Activity">
+    <ul
+      className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
+      aria-label="Activity"
+    >
       {STATS.map(({ key, unit, hint, icon: Icon }) => (
         <li key={key} className="flex items-center gap-1.5" title={hint}>
           <Icon className="size-3.5" aria-hidden />

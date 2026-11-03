@@ -113,11 +113,7 @@ export default defineSchema({
     loanId: v.id("loans"),
     event: loanStatusValidator, // the loan status this event announces
     idempotencyKey: v.string(), // notify:{loanId}:{status}
-    status: v.union(
-      v.literal("pending"),
-      v.literal("delivered"),
-      v.literal("failed"),
-    ),
+    status: v.union(v.literal("pending"), v.literal("delivered"), v.literal("failed")),
     attempts: v.number(),
     nextAttemptAt: v.number(),
     lastError: v.optional(v.string()),

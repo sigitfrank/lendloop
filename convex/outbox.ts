@@ -62,7 +62,8 @@ export const payloadFor = internalQuery({
       payload: {
         eventId: row._id,
         idempotencyKey: row.idempotencyKey,
-        event: row.event === "pending" ? ("loan.created" as const) : ("loan.status_changed" as const),
+        event:
+          row.event === "pending" ? ("loan.created" as const) : ("loan.status_changed" as const),
         status: row.event,
         loan: { id: loan._id, startDate: loan.startDate, endDate: loan.endDate },
         toolName: tool?.name ?? "a tool",

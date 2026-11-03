@@ -15,10 +15,7 @@
       "name": "Every day 09:00 UTC",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        0,
-        300
-      ]
+      "position": [0, 300]
     },
     {
       "id": "97aef882-53e3-4354-9f14-002599fefb67",
@@ -29,10 +26,7 @@
       "name": "Prepare: fetch overdue loans",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        220,
-        300
-      ]
+      "position": [220, 300]
     },
     {
       "id": "32e69081-fca1-4e1a-b4d2-a7962961f9e0",
@@ -46,10 +40,7 @@
       "name": "Sign request",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 2,
-      "position": [
-        440,
-        300
-      ],
+      "position": [440, 300],
       "credentials": {
         "crypto": {
           "id": "lendloopHmacSecret",
@@ -80,10 +71,7 @@
       "name": "GET overdue loans",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        660,
-        300
-      ],
+      "position": [660, 300],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
@@ -97,10 +85,7 @@
       "name": "One item per loan",
       "type": "n8n-nodes-base.splitOut",
       "typeVersion": 1,
-      "position": [
-        880,
-        300
-      ]
+      "position": [880, 300]
     },
     {
       "id": "062962dc-3e4f-4b01-9d88-18ff4c73b27e",
@@ -111,10 +96,7 @@
       "name": "Compose reminder",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1100,
-        300
-      ]
+      "position": [1100, 300]
     },
     {
       "id": "d32d713c-57c2-4ad8-a92b-85dda06b3b01",
@@ -131,10 +113,7 @@
       "name": "Send reminder (Mailpit)",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [
-        1320,
-        300
-      ],
+      "position": [1320, 300],
       "credentials": {
         "smtp": {
           "id": "lendloopMailpitSmtp",
@@ -155,10 +134,7 @@
       "name": "Prepare write-back: sent",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1540,
-        200
-      ]
+      "position": [1540, 200]
     },
     {
       "id": "ef153567-d78e-41ed-a045-b126035741eb",
@@ -169,10 +145,7 @@
       "name": "Prepare write-back: failed",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1540,
-        420
-      ]
+      "position": [1540, 420]
     },
     {
       "id": "862164c4-0a57-48a4-b4f6-ce454b27de1b",
@@ -186,10 +159,7 @@
       "name": "Sign write-back",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 2,
-      "position": [
-        1760,
-        300
-      ],
+      "position": [1760, 300],
       "credentials": {
         "crypto": {
           "id": "lendloopHmacSecret",
@@ -224,10 +194,7 @@
       "name": "POST reminder status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        1980,
-        300
-      ],
+      "position": [1980, 300],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000

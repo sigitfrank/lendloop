@@ -146,12 +146,16 @@ export const mine = query({
   returns: paginationResultValidator(loanViewValidator),
   handler: async (ctx, { paginationOpts, filter, search, sort, today }) => {
     const user = await requireUser(ctx);
-    const result = await loansQuery(ctx, { borrowerId: user._id }, {
-      filter: filter ?? "all",
-      sort: sort ?? "newest",
-      search: cleanSearch(search, SEARCH_MAX),
-      today,
-    }).paginate(paginationOpts);
+    const result = await loansQuery(
+      ctx,
+      { borrowerId: user._id },
+      {
+        filter: filter ?? "all",
+        sort: sort ?? "newest",
+        search: cleanSearch(search, SEARCH_MAX),
+        today,
+      },
+    ).paginate(paginationOpts);
     const page = await Promise.all(result.page.map((loan) => toLoanView(ctx, loan, today)));
     return { ...result, page };
   },
@@ -163,12 +167,16 @@ export const incoming = query({
   returns: paginationResultValidator(loanViewValidator),
   handler: async (ctx, { paginationOpts, filter, search, sort, today }) => {
     const user = await requireUser(ctx);
-    const result = await loansQuery(ctx, { ownerId: user._id }, {
-      filter: filter ?? "all",
-      sort: sort ?? "newest",
-      search: cleanSearch(search, SEARCH_MAX),
-      today,
-    }).paginate(paginationOpts);
+    const result = await loansQuery(
+      ctx,
+      { ownerId: user._id },
+      {
+        filter: filter ?? "all",
+        sort: sort ?? "newest",
+        search: cleanSearch(search, SEARCH_MAX),
+        today,
+      },
+    ).paginate(paginationOpts);
     const page = await Promise.all(result.page.map((loan) => toLoanView(ctx, loan, today)));
     return { ...result, page };
   },
@@ -187,9 +195,7 @@ export const incomingPendingCount = query({
     if (!user) return 0;
     const pending = await ctx.db
       .query("loans")
-      .withIndex("by_ownerId_and_status", (q) =>
-        q.eq("ownerId", user._id).eq("status", "pending"),
-      )
+      .withIndex("by_ownerId_and_status", (q) => q.eq("ownerId", user._id).eq("status", "pending"))
       .take(PENDING_COUNT_CAP);
     return pending.length;
   },

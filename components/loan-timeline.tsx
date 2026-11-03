@@ -84,7 +84,9 @@ export function LoanTimeline({ loan, now }: { loan: LoanView; now: number }) {
               <p className={entry.kind === "lifecycle" ? "font-medium" : undefined}>{entry.text}</p>
               <p className="text-muted-foreground">{timeAgo(entry.at, now)}</p>
               {entry.detail && (
-                <p className="mt-0.5 text-[11px] wrap-break-word text-muted-foreground">{entry.detail}</p>
+                <p className="mt-0.5 text-[11px] wrap-break-word text-muted-foreground">
+                  {entry.detail}
+                </p>
               )}
             </li>
           );

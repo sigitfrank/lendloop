@@ -29,10 +29,7 @@ export function ConditionMeter({ condition }: { condition: Condition }) {
     >
       <div className="flex gap-0.5" aria-hidden>
         {Array.from({ length: SEGMENTS }, (_, i) => (
-          <span
-            key={i}
-            className={cn("h-2 w-4 rounded-full", i < filled ? color : "bg-border")}
-          />
+          <span key={i} className={cn("h-2 w-4 rounded-full", i < filled ? color : "bg-border")} />
         ))}
       </div>
       <span className="text-xs text-muted-foreground">{label}</span>

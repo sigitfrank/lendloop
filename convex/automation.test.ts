@@ -83,7 +83,9 @@ describe("HMAC signing", () => {
     const p = { ...parts, timestamp: String(now()) };
     const signature = await sign(SECRET, p);
     expect(await verify(SECRET, { ...p, body: '{"a":2}' }, signature, now())).toBe(false);
-    expect(await verify(SECRET, { ...p, path: "/n8n/automation-error" }, signature, now())).toBe(false);
+    expect(await verify(SECRET, { ...p, path: "/n8n/automation-error" }, signature, now())).toBe(
+      false,
+    );
     expect(await verify("other-secret", p, signature, now())).toBe(false);
     expect(await verify(SECRET, p, signature, now() + 6 * 60)).toBe(false); // > 5 min later
     expect(await verify(SECRET, p, "not-hex", now())).toBe(false);
@@ -235,7 +237,10 @@ describe("outbox delivery to n8n", () => {
 describe("automation activity on loans (bonus)", () => {
   test("parties see retrying → failed in plain status; only admins see the error detail", async () => {
     vi.useFakeTimers();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 503 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("down", { status: 503 })),
+    );
     const { t } = await setupOverdueLoan();
     await t.run(async (ctx) => {
       await ctx.db.insert("users", {
@@ -246,20 +251,30 @@ describe("automation activity on loans (bonus)", () => {
         trustedLender: false,
       });
     });
-    const as = (who: string) => t.withIdentity({ tokenIdentifier: `test|${who}`, subject: who, issuer: "test" });
+    const as = (who: string) =>
+      t.withIdentity({ tokenIdentifier: `test|${who}`, subject: who, issuer: "test" });
     const toolId = await t.run(async (ctx) => (await ctx.db.query("tools").first())!._id);
     await as("bob").mutation(api.loans.request, {
       toolId,
       startDate: toIsoDate(Date.now() + 3 * DAY),
       endDate: toIsoDate(Date.now() + 5 * DAY),
     });
-    const view = { paginationOpts: { numItems: 10, cursor: null }, filter: "pending" as const, today: toIsoDate(Date.now()) };
+    const view = {
+      paginationOpts: { numItems: 10, cursor: null },
+      filter: "pending" as const,
+      today: toIsoDate(Date.now()),
+    };
 
     // First delivery attempt fails → the lender sees a retry, without internals.
     vi.runOnlyPendingTimers();
     await t.finishInProgressScheduledFunctions();
     let [loan] = (await as("alice").query(api.loans.incoming, view)).page;
-    expect(loan.activity[0]).toMatchObject({ kind: "retrying", status: "retrying", about: "pending", attempt: 2 });
+    expect(loan.activity[0]).toMatchObject({
+      kind: "retrying",
+      status: "retrying",
+      about: "pending",
+      attempt: 2,
+    });
     expect(loan.activity[0].detail).toBeUndefined();
 
     // All retries exhausted → "failed"; still no detail for the parties.
@@ -385,18 +400,28 @@ test("the automation log is searchable, combined with the status filter", async 
       trustedLender: false,
     }),
   );
-  const log = (args: Record<string, unknown>) => t.mutation(internal.automation.logRequest, {
-    direction: "to_n8n", method: "POST", path: "/webhook/lendloop-loan-events", ...args,
-  } as never);
+  const log = (args: Record<string, unknown>) =>
+    t.mutation(internal.automation.logRequest, {
+      direction: "to_n8n",
+      method: "POST",
+      path: "/webhook/lendloop-loan-events",
+      ...args,
+    } as never);
   await log({ statusCode: 503, loanId, detail: "n8n responded 503" });
   await log({ statusCode: 202, loanId });
 
   const admin = t.withIdentity({ tokenIdentifier: "test|admin", subject: "admin", issuer: "test" });
   const find = (search: string, filter = "all") =>
-    admin.query(api.admin.automationLog, { paginationOpts: { numItems: 10, cursor: null }, search, filter });
+    admin.query(api.admin.automationLog, {
+      paginationOpts: { numItems: 10, cursor: null },
+      search,
+      filter,
+    });
 
   expect((await find("Drill")).page).toHaveLength(2); // tool name of the linked loan
   expect((await find("responded")).page).toEqual([expect.objectContaining({ statusCode: 503 })]);
-  expect((await find("Drill", "failed")).page).toEqual([expect.objectContaining({ statusCode: 503 })]);
+  expect((await find("Drill", "failed")).page).toEqual([
+    expect.objectContaining({ statusCode: 503 }),
+  ]);
   expect((await find("Drill", "202")).page).toEqual([expect.objectContaining({ statusCode: 202 })]);
 });

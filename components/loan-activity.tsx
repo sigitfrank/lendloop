@@ -54,7 +54,10 @@ export function LoanActivity({
 }) {
   if (items.length === 0) return null;
   return (
-    <ul className={cn("space-y-1 text-xs text-muted-foreground", className)} aria-label="Automation activity">
+    <ul
+      className={cn("space-y-1 text-xs text-muted-foreground", className)}
+      aria-label="Automation activity"
+    >
       {items.slice(0, limit).map((item) => {
         const { icon: Icon, className: tone } = ICON[item.status];
         return (

@@ -12,10 +12,7 @@
       "name": "Loan event (from Convex)",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [
-        0,
-        300
-      ],
+      "position": [0, 300],
       "webhookId": "9e853f76-8c7d-4284-8870-ba94819d5c18"
     },
     {
@@ -27,10 +24,7 @@
       "name": "Build string to verify",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        220,
-        300
-      ]
+      "position": [220, 300]
     },
     {
       "id": "dacb7ac4-4517-4eb7-9ccd-3f5a3b6dc7cc",
@@ -44,10 +38,7 @@
       "name": "Expected signature",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 2,
-      "position": [
-        440,
-        300
-      ],
+      "position": [440, 300],
       "credentials": {
         "crypto": {
           "id": "lendloopHmacSecret",
@@ -64,10 +55,7 @@
       "name": "Check signature",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        660,
-        300
-      ]
+      "position": [660, 300]
     },
     {
       "id": "41a11e72-56d7-4fc2-b4e5-99bc12dbea05",
@@ -97,10 +85,7 @@
       "name": "Signature valid?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        880,
-        300
-      ]
+      "position": [880, 300]
     },
     {
       "id": "d3779395-2e66-4bed-8821-07c7f4122fc4",
@@ -114,10 +99,7 @@
       "name": "Reject (401)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        1100,
-        460
-      ]
+      "position": [1100, 460]
     },
     {
       "id": "c593f424-1359-4f14-b02e-2428841a839f",
@@ -131,10 +113,7 @@
       "name": "Accept (202)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [
-        1100,
-        200
-      ]
+      "position": [1100, 200]
     },
     {
       "id": "d485a283-9fda-417e-9b87-1d71ad82055c",
@@ -145,10 +124,7 @@
       "name": "Prepare: already sent?",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1320,
-        200
-      ]
+      "position": [1320, 200]
     },
     {
       "id": "faec8cad-f03e-4d6a-b342-9c302805e418",
@@ -162,10 +138,7 @@
       "name": "Sign status check",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 2,
-      "position": [
-        1540,
-        200
-      ],
+      "position": [1540, 200],
       "credentials": {
         "crypto": {
           "id": "lendloopHmacSecret",
@@ -196,10 +169,7 @@
       "name": "GET event status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        1760,
-        200
-      ],
+      "position": [1760, 200],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
@@ -232,10 +202,7 @@
       "name": "Already sent?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [
-        1980,
-        200
-      ]
+      "position": [1980, 200]
     },
     {
       "id": "c86158cb-089f-462b-ab02-2ace35de426d",
@@ -243,10 +210,7 @@
       "name": "Skip (already sent)",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [
-        2200,
-        80
-      ]
+      "position": [2200, 80]
     },
     {
       "id": "75c4856b-35f6-40fc-a722-5f3d914b05e1",
@@ -257,10 +221,7 @@
       "name": "Compose email",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2200,
-        300
-      ]
+      "position": [2200, 300]
     },
     {
       "id": "c779e6f7-82bf-40e7-adf5-3a694cc24323",
@@ -277,10 +238,7 @@
       "name": "Send email (Mailpit)",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [
-        2420,
-        300
-      ],
+      "position": [2420, 300],
       "credentials": {
         "smtp": {
           "id": "lendloopMailpitSmtp",
@@ -301,10 +259,7 @@
       "name": "Prepare write-back: sent",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2640,
-        200
-      ]
+      "position": [2640, 200]
     },
     {
       "id": "9e45190a-2d15-49e8-a859-43a7ae4a8d69",
@@ -315,10 +270,7 @@
       "name": "Prepare write-back: failed",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2640,
-        420
-      ]
+      "position": [2640, 420]
     },
     {
       "id": "2a47d795-f778-4699-bf9c-a73e482b0788",
@@ -332,10 +284,7 @@
       "name": "Sign write-back",
       "type": "n8n-nodes-base.crypto",
       "typeVersion": 2,
-      "position": [
-        2860,
-        300
-      ],
+      "position": [2860, 300],
       "credentials": {
         "crypto": {
           "id": "lendloopHmacSecret",
@@ -370,10 +319,7 @@
       "name": "POST notification status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        3080,
-        300
-      ],
+      "position": [3080, 300],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000

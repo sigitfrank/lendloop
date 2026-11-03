@@ -2,7 +2,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function ToolGridSkeleton({ count = 6 }: { count?: number }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading tools">
+    <div
+      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      aria-busy="true"
+      aria-label="Loading tools"
+    >
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="space-y-3 rounded-xl border bg-card p-4">
           <Skeleton className="h-5 w-2/3" />
