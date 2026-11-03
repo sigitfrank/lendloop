@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as lib_auth from "../lib/auth.js";
+import type * as lib_dates from "../lib/dates.js";
+import type * as lib_validators from "../lib/validators.js";
 import type * as users from "../users.js";
 
 import type {
@@ -17,6 +20,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "lib/auth": typeof lib_auth;
+  "lib/dates": typeof lib_dates;
+  "lib/validators": typeof lib_validators;
   users: typeof users;
 }>;
 
