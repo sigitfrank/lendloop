@@ -7,6 +7,7 @@ import { ConvexError, v } from "convex/values";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireToolOwner, requireUser } from "./lib/auth";
+import { boundedPage } from "./lib/pagination";
 import { availabilityValidator, getAvailability } from "./lib/availability";
 import { cleanSearch } from "./lib/search";
 import {
@@ -154,7 +155,7 @@ export const list = query({
       { category },
       sort ?? "newest",
       cleanSearch(search, SEARCH_MAX),
-    ).paginate(paginationOpts);
+    ).paginate(boundedPage(paginationOpts));
     const page = await Promise.all(
       result.page.map((tool) => toToolCard(ctx, tool, user._id, today)),
     );
@@ -173,7 +174,7 @@ export const mine = query({
       { ownerId: user._id },
       sort ?? "newest",
       cleanSearch(search, SEARCH_MAX),
-    ).paginate(paginationOpts);
+    ).paginate(boundedPage(paginationOpts));
     const page = await Promise.all(
       result.page.map((tool) => toToolCard(ctx, tool, user._id, today)),
     );

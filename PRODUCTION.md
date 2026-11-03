@@ -30,8 +30,11 @@ operations and scale.
 - **Don't depend on n8n being up at 09:00.** Either run WF2 hourly (safe: the overdue feed only
   returns loans not yet reminded today), or let a Convex cron call an n8n webhook so Convex owns
   the clock and its retries.
-- **Outbox sweeper.** A Convex cron that re-schedules any pending outbox row whose `nextAttemptAt`
-  has passed, as a safety net if a scheduled delivery was ever lost.
+- **Retry failed emails.** The outbox retries the Convex → n8n hop; an email that fails inside n8n
+  is recorded as failed but not re-sent. Let Convex re-queue a failed `notify:` event.
+- **Verify the raw webhook body in WF1.** n8n re-serialises the JSON before checking the
+  signature; it matches today because both sides use `JSON.stringify`, but enabling the Webhook
+  node's raw body option removes that dependency.
 - **Dead-letter handling.** An admin action to retry a failed notification after fixing the
   cause, and an alert when failures cross a threshold.
 - **Exactly-once email is not guaranteed.** Delivery is at-least-once; WF1's "already sent?" check
@@ -42,8 +45,11 @@ operations and scale.
 - **Secret rotation.** Support two HMAC secrets during a rotation window (sign with the new one,
   accept both), then retire the old one. Separate secrets per direction (Convex → n8n and
   n8n → Convex) so one leak doesn't expose both.
-- **Rate limiting** on the `/n8n/*` HTTP endpoints and on borrow requests per user
-  (`@convex-dev/rate-limiter`), plus bot protection on sign-up.
+- **Rate limiting** on the `/n8n/*` HTTP endpoints too (borrow requests and MCP calls already
+  are), plus bot protection on sign-up.
+- **Secrets off the command line.** The setup scripts pass secrets to `convex env set` as an
+  argument (no shell, but briefly visible in the local process list); production sets them in the
+  host's secret store.
 - **Audit log** for admin actions (remove listing, Trusted Lender, role changes): who, what, when.
 - **Admin access.** Require MFA for admins in Clerk; consider a separate admin app or route
   protection by Clerk role in addition to the Convex check.
@@ -54,15 +60,16 @@ operations and scale.
 
 - **Public HTTPS URL.** Claude Desktop and claude.ai connect from the internet, so the hosted app
   (fixed domain) is required; localhost only works with Claude Code.
-- **Scoped consent.** Separate OAuth scopes for read and write (and admin), so a user can let
-  Claude browse without letting it approve or cancel; check them per tool.
+- **Scoped consent.** Today any valid Clerk OAuth token for the user gets every tool. Add
+  separate scopes for read and write (and admin), so a user can let Claude browse without letting
+  it approve or cancel, and check them per tool.
 - **Client allow-list.** Only allow known MCP clients (Clerk CIMD pre-registered clients) instead
   of open dynamic registration.
 - **Key rotation.** `pnpm mcp:setup --rotate` replaces the route's signing key; in production,
   publish two keys (old + new `kid`) during the switch, keep the private key in the host's secret
   store, and rotate on a schedule.
 - **Anomaly alerts** on the MCP audit log (error spikes, rate-limit hits, unusual write volume),
-  a retention cron for it like the automation log, and an admin view across users.
+  and an admin view across users (rows are already pruned after 90 days).
 - **Opaque OAuth tokens.** Dev uses Clerk JWT access tokens (verified locally, valid until they
   expire). Opaque tokens can be revoked instantly at the cost of a Clerk call per request; switch
   to them if "disconnect now" must take effect immediately.

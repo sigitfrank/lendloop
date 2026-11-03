@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import rateLimiter from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -35,6 +36,7 @@ async function signedHeaders(method: string, path: string, body = "", secret = S
 /** Alice lends a drill, Bob borrows it; the loan ended two days ago (overdue). */
 async function setupOverdueLoan() {
   const t = convexTest(schema, modules);
+  rateLimiter.register(t);
   const loanId = await t.run(async (ctx) => {
     const alice = await ctx.db.insert("users", {
       tokenIdentifier: "test|alice",
@@ -312,20 +314,25 @@ describe("automation activity on loans (bonus)", () => {
 describe("automation log", () => {
   test("logs n8n → Convex calls with their status, and is admin-only", async () => {
     const { t, loanId } = await setupOverdueLoan();
-    await t.fetch("/n8n/overdue-loans"); // unsigned → 401
+    await t.fetch("/n8n/overdue-loans"); // unsigned → 401, not logged (no DB write)
     const body = JSON.stringify({ idempotencyKey: `overdue:${loanId}:x`, loanId, status: "sent" });
     await t.fetch("/n8n/reminder-status", {
       method: "POST",
       headers: await signedHeaders("POST", "/n8n/reminder-status", body),
       body,
     }); // signed → 200
+    await t.fetch("/n8n/reminder-status", {
+      method: "POST",
+      headers: await signedHeaders("POST", "/n8n/reminder-status", "{}"),
+      body: "{}",
+    }); // signed but invalid → 400
 
     const rows = await t.run((ctx) => ctx.db.query("automationLog").order("desc").collect());
     expect(rows.map((r) => [r.direction, r.path, r.statusCode])).toEqual([
+      ["from_n8n", "/n8n/reminder-status", 400],
       ["from_n8n", "/n8n/reminder-status", 200],
-      ["from_n8n", "/n8n/overdue-loans", 401],
     ]);
-    expect(rows[1].detail).toBe("Invalid signature");
+    expect(rows[0].detail).toBeTruthy();
 
     const bob = t.withIdentity({ tokenIdentifier: "test|bob", subject: "bob", issuer: "test" });
     await expect(
@@ -424,4 +431,112 @@ test("the automation log is searchable, combined with the status filter", async 
     expect.objectContaining({ statusCode: 503 }),
   ]);
   expect((await find("Drill", "202")).page).toEqual([expect.objectContaining({ statusCode: 202 })]);
+});
+
+describe("review fixes", () => {
+  test("delivery has a timeout, and a delivery that never finished is re-queued", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { t, loanId } = await setupOverdueLoan();
+    const outboxId = await t.run((ctx) =>
+      ctx.db.insert("outbox", {
+        loanId,
+        event: "approved",
+        idempotencyKey: notificationKey(loanId, "approved"),
+        status: "pending",
+        attempts: 0,
+        nextAttemptAt: Date.now() - 60 * 60_000, // due an hour ago, nothing recorded
+      }),
+    );
+
+    expect(await t.mutation(internal.outbox.sweepStuck, {})).toEqual({ swept: 1 });
+    const swept = await t.run((ctx) => ctx.db.get("outbox", outboxId));
+    expect(swept).toMatchObject({ status: "pending", attempts: 1 });
+    expect(swept!.nextAttemptAt).toBeGreaterThan(Date.now());
+
+    await t.finishAllScheduledFunctions(vi.runAllTimers); // the re-queued retry runs
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(await t.run((ctx) => ctx.db.get("outbox", outboxId))).toMatchObject({
+      status: "delivered",
+    });
+  });
+
+  test("a write-back key must belong to the loan it names", async () => {
+    const { t, loanId } = await setupOverdueLoan();
+    const otherKey = overdueReminderKey("someOtherLoanId", toIsoDate(Date.now()));
+    const body = JSON.stringify({ idempotencyKey: otherKey, loanId, status: "sent" });
+    const response = await t.fetch("/n8n/reminder-status", {
+      method: "POST",
+      headers: await signedHeaders("POST", "/n8n/reminder-status", body),
+      body,
+    });
+    expect(response.status).toBe(400);
+  });
+
+  test("pending requests past their start date expire as declined", async () => {
+    const { t } = await setupOverdueLoan();
+    const ids = await t.run(async (ctx) => {
+      const loan = (await ctx.db.query("loans").first())!;
+      const make = (startInDays: number) =>
+        ctx.db.insert("loans", {
+          ...loan,
+          _id: undefined,
+          _creationTime: undefined,
+          status: "pending",
+          startDate: toIsoDate(Date.now() + startInDays * DAY),
+          endDate: toIsoDate(Date.now() + (startInDays + 1) * DAY),
+        } as never);
+      return { stale: await make(-1), current: await make(0), future: await make(2) };
+    });
+
+    expect(await t.mutation(internal.loans.expireStaleRequests, {})).toEqual({ expired: 1 });
+    const status = (id: Id<"loans">) =>
+      t.run(async (ctx) => (await ctx.db.get("loans", id))!.status);
+    expect(await status(ids.stale)).toBe("declined");
+    expect(await status(ids.current)).toBe("pending"); // starts today: can still be approved
+    expect(await status(ids.future)).toBe("pending");
+  });
+
+  test("the automation log rejects unknown filters", async () => {
+    const { t } = await setupOverdueLoan();
+    await t.run((ctx) =>
+      ctx.db.insert("users", {
+        tokenIdentifier: "test|admin",
+        name: "Ada Admin",
+        role: "admin",
+        trustedLender: false,
+      }),
+    );
+    const admin = t.withIdentity({
+      tokenIdentifier: "test|admin",
+      subject: "admin",
+      issuer: "test",
+    });
+    await expect(
+      admin.query(api.admin.automationLog, {
+        paginationOpts: { numItems: 10, cursor: null },
+        filter: "everything",
+      }),
+    ).rejects.toThrow(/Unknown filter/);
+  });
+
+  test("borrow requests are rate limited per user", async () => {
+    const { t } = await setupOverdueLoan();
+    const bob = t.withIdentity({ tokenIdentifier: "test|bob", subject: "bob", issuer: "test" });
+    const toolId = await t.run(async (ctx) => (await ctx.db.query("tools").first())!._id);
+    const range = {
+      startDate: toIsoDate(Date.now() + 3 * DAY),
+      endDate: toIsoDate(Date.now() + 4 * DAY),
+    };
+    // A request/cancel loop would email the lender each time; burst capacity is 10.
+    for (let i = 0; i < 10; i++) {
+      const loanId = await bob.mutation(api.loans.request, { toolId, ...range });
+      await bob.mutation(api.loans.cancel, { loanId });
+    }
+    await expect(bob.mutation(api.loans.request, { toolId, ...range })).rejects.toThrow(
+      /Too many requests/,
+    );
+  });
 });

@@ -1,16 +1,11 @@
-import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { ConvexError, v } from "convex/values";
-import { components } from "./_generated/api";
-import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { isMcpCall, requireUser } from "./lib/auth";
+import { enforceRateLimit } from "./lib/rateLimits";
 
 // Guardrails around MCP tool calls (Claude). The MCP route calls startCall
 // before every tool and finishCall after it, as the signed-in user.
-
-const rateLimiter = new RateLimiter(components.rateLimiter, {
-  // 60 tool calls per minute per user, with short bursts allowed.
-  mcpToolCall: { kind: "token bucket", rate: 60, period: MINUTE, capacity: 20 },
-});
 
 /** Rate-limits the user and opens an audit row. MCP identities only. */
 export const startCall = mutation({
@@ -20,11 +15,7 @@ export const startCall = mutation({
     const user = await requireUser(ctx);
     if (!(await isMcpCall(ctx))) throw new ConvexError("Only available to MCP clients.");
 
-    const { ok, retryAfter } = await rateLimiter.limit(ctx, "mcpToolCall", { key: user._id });
-    if (!ok) {
-      const seconds = Math.ceil((retryAfter ?? 0) / 1000);
-      throw new ConvexError(`Too many requests. Try again in ${seconds} seconds.`);
-    }
+    await enforceRateLimit(ctx, "mcpToolCall", user._id);
     return await ctx.db.insert("mcpAuditLog", {
       userId: user._id,
       tool: tool.slice(0, 64),
@@ -81,5 +72,26 @@ export const myRecentCalls = query({
       status,
       error,
     }));
+  },
+});
+
+const AUDIT_RETENTION_DAYS = 90;
+const PRUNE_BATCH = 500;
+
+/** Cron: delete MCP audit rows older than 90 days. */
+export const pruneAuditLog = internalMutation({
+  args: {},
+  returns: v.object({ deleted: v.number() }),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const old = await ctx.db
+      .query("mcpAuditLog")
+      .withIndex("by_creation_time", (q) => q.lt("_creationTime", cutoff))
+      .take(PRUNE_BATCH);
+    for (const row of old) await ctx.db.delete("mcpAuditLog", row._id);
+    if (old.length === PRUNE_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.mcp.pruneAuditLog, {});
+    }
+    return { deleted: old.length };
   },
 });

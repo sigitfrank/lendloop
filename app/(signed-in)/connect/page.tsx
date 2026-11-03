@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 export default async function ConnectPage() {
   const h = await headers();
   const proto = h.get("x-forwarded-proto") ?? "http";
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3001";
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
 
   return (
     <div className="space-y-4">

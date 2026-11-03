@@ -29,8 +29,8 @@ type Handler = (ctx: ActionCtx, body: string, url: URL, note: LogNote) => Promis
 
 /**
  * Verify the signature, then run the handler. Bad input → 400; unexpected
- * errors → generic 500 (details only in Convex logs). Every request, whatever
- * its outcome, is written to the automation log.
+ * errors → generic 500 (details only in Convex logs). Every signed request,
+ * whatever its outcome, is written to the automation log; 401s are not.
  */
 function signedRoute(handler: Handler) {
   return httpAction(async (ctx, request) => {
@@ -38,6 +38,12 @@ function signedRoute(handler: Handler) {
     const url = new URL(request.url);
     const note: LogNote = {};
     const response = await handle(ctx, request, url, note);
+    if (response.status === 401) {
+      // Unsigned or forged: rejected before any database access, so anyone
+      // who knows the URL can't fill the automation log. Convex logs only.
+      console.warn(`401 ${request.method} ${url.pathname}`);
+      return response;
+    }
     const detail = response.ok ? note.detail : ((await response.clone().json()).error as string);
     await ctx.runMutation(internal.automation.logRequest, {
       direction: "from_n8n",
@@ -119,7 +125,10 @@ function readStatus(value: string): "sent" | "failed" {
 function writeBack(type: "request_notification" | "overdue_reminder", keyPrefix: string): Handler {
   return async (ctx, body) => {
     const f = readFields(body, ["idempotencyKey", "loanId", "status"], ["detail"]);
-    if (!f.idempotencyKey.startsWith(keyPrefix)) throw new BadRequest("Invalid idempotencyKey");
+    // The key must belong to this loan, so one loan's event can't be written onto another's.
+    if (!f.idempotencyKey.startsWith(`${keyPrefix}${f.loanId}:`)) {
+      throw new BadRequest("Invalid idempotencyKey");
+    }
     const result = await ctx.runMutation(internal.automation.recordEvent, {
       idempotencyKey: f.idempotencyKey,
       type,

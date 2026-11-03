@@ -7,7 +7,9 @@
         "httpMethod": "POST",
         "path": "lendloop-loan-events",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {
+          "rawBody": true
+        }
       },
       "name": "Loan event (from Convex)",
       "type": "n8n-nodes-base.webhook",
@@ -19,7 +21,7 @@
       "id": "2c068eed-e6a0-4b93-a84e-fa4ece89c369",
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Rebuild exactly what Convex signed: \"{timestamp}.POST.{path}.{rawBody}\".\n// Convex sends compact JSON.stringify output, so re-stringifying the parsed\n// body reproduces the same bytes.\nconst { headers, body } = $input.first().json;\nconst timestamp = headers['x-lendloop-timestamp'] ?? '';\nreturn [{\n  json: {\n    event: body,\n    timestamp,\n    receivedSignature: (headers['x-lendloop-signature'] ?? '').toLowerCase(),\n    toSign: `${timestamp}.POST./webhook/lendloop-loan-events.${JSON.stringify(body)}`,\n  },\n}];"
+        "jsCode": "// Rebuild exactly what Convex signed: \"{timestamp}.POST.{path}.{rawBody}\".\n// The Webhook node's Raw Body option keeps the request bytes (binary \"data\"),\n// so the signature is checked against what Convex actually sent, and the event\n// is parsed from those same bytes. Missing or unparsable body: fails the check.\nconst item = $input.first();\nconst headers = item.json.headers ?? {};\nconst timestamp = headers['x-lendloop-timestamp'] ?? '';\nconst raw = item.binary?.data\n  ? (await this.helpers.getBinaryDataBuffer(0, 'data')).toString('utf8')\n  : '';\nlet event = null;\ntry {\n  event = JSON.parse(raw);\n} catch {\n  event = null;\n}\nreturn [{\n  json: {\n    event,\n    timestamp,\n    receivedSignature: (headers['x-lendloop-signature'] ?? '').toLowerCase(),\n    toSign: `${timestamp}.POST./webhook/lendloop-loan-events.${raw}`,\n  },\n}];"
       },
       "name": "Build string to verify",
       "type": "n8n-nodes-base.code",

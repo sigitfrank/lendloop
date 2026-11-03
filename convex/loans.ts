@@ -1,11 +1,14 @@
 import { paginationResultValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
 import { getActiveTool, getCurrentUser, requireLoanParty, requireUser } from "./lib/auth";
+import { MAX_LOANS_PER_TOOL_STATUS } from "./lib/availability";
 import { assertValidLoanRange, rangesOverlap, toIsoDate } from "./lib/dates";
 import { loanListArgs, loansQuery, loanViewValidator, toLoanView } from "./lib/loanViews";
 import { enqueueLoanNotification } from "./lib/outbox";
+import { boundedPage } from "./lib/pagination";
+import { enforceRateLimit } from "./lib/rateLimits";
 import { cleanSearch, loanSearchText } from "./lib/search";
 import { SEARCH_MAX, type LoanStatus } from "./lib/validators";
 
@@ -14,8 +17,6 @@ import { SEARCH_MAX, type LoanStatus } from "./lib/validators";
 //   pending  → approved    tool owner (no overlap with another approved loan)
 //   pending  → declined    tool owner
 //   approved → returned    tool owner (the lender confirms they got it back)
-
-const MAX_LOANS_CHECKED = 100; // per tool and status; approved/pending sets stay small
 
 const NOT_ALLOWED = "You don't have permission to do that.";
 
@@ -33,7 +34,7 @@ async function loansFor(ctx: MutationCtx, toolId: Id<"tools">, status: LoanStatu
   return await ctx.db
     .query("loans")
     .withIndex("by_toolId_and_status", (q) => q.eq("toolId", toolId).eq("status", status))
-    .take(MAX_LOANS_CHECKED);
+    .take(MAX_LOANS_PER_TOOL_STATUS);
 }
 
 /** Rejects a range that overlaps an approved loan on the same tool. */
@@ -59,6 +60,7 @@ export const request = mutation({
       throw new ConvexError("You can't borrow your own tool.");
     }
     assertValidLoanRange(startDate, endDate, toIsoDate(Date.now()));
+    await enforceRateLimit(ctx, "loanRequest", user._id);
 
     const pending = await loansFor(ctx, toolId, "pending");
     if (pending.some((loan) => loan.borrowerId === user._id)) {
@@ -138,6 +140,27 @@ export const markReturned = mutation({
   },
 });
 
+/**
+ * Cron: a request nobody answered before its start date can no longer be
+ * approved (see respond), so close it as declined instead of leaving it
+ * pending forever. No email: the lender didn't actively decline it.
+ */
+export const expireStaleRequests = internalMutation({
+  args: {},
+  returns: v.object({ expired: v.number() }),
+  handler: async (ctx) => {
+    const today = toIsoDate(Date.now());
+    const stale = await ctx.db
+      .query("loans")
+      .withIndex("by_status_and_startDate", (q) => q.eq("status", "pending").lt("startDate", today))
+      .take(200);
+    for (const loan of stale) {
+      await ctx.db.patch("loans", loan._id, { status: "declined", decidedAt: Date.now() });
+    }
+    return { expired: stale.length };
+  },
+});
+
 // ── Views ──────────────────────────────────────────────────────────────────
 
 /** "My requests": loans where the caller is the borrower. */
@@ -155,7 +178,7 @@ export const mine = query({
         search: cleanSearch(search, SEARCH_MAX),
         today,
       },
-    ).paginate(paginationOpts);
+    ).paginate(boundedPage(paginationOpts));
     const page = await Promise.all(result.page.map((loan) => toLoanView(ctx, loan, today)));
     return { ...result, page };
   },
@@ -176,7 +199,7 @@ export const incoming = query({
         search: cleanSearch(search, SEARCH_MAX),
         today,
       },
-    ).paginate(paginationOpts);
+    ).paginate(boundedPage(paginationOpts));
     const page = await Promise.all(result.page.map((loan) => toLoanView(ctx, loan, today)));
     return { ...result, page };
   },

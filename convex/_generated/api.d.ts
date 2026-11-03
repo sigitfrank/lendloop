@@ -22,6 +22,8 @@ import type * as lib_keys from "../lib/keys.js";
 import type * as lib_loanViews from "../lib/loanViews.js";
 import type * as lib_mcp from "../lib/mcp.js";
 import type * as lib_outbox from "../lib/outbox.js";
+import type * as lib_pagination from "../lib/pagination.js";
+import type * as lib_rateLimits from "../lib/rateLimits.js";
 import type * as lib_search from "../lib/search.js";
 import type * as lib_validators from "../lib/validators.js";
 import type * as loans from "../loans.js";
@@ -51,6 +53,8 @@ declare const fullApi: ApiFromModules<{
   "lib/loanViews": typeof lib_loanViews;
   "lib/mcp": typeof lib_mcp;
   "lib/outbox": typeof lib_outbox;
+  "lib/pagination": typeof lib_pagination;
+  "lib/rateLimits": typeof lib_rateLimits;
   "lib/search": typeof lib_search;
   "lib/validators": typeof lib_validators;
   loans: typeof loans;

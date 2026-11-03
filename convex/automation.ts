@@ -15,6 +15,7 @@ const eventTypeValidator = v.union(
 const eventStatusValidator = v.union(v.literal("sent"), v.literal("failed"));
 
 const MAX_OVERDUE_PER_RUN = 200;
+const MAX_OVERDUE_SCANNED = 2000;
 
 /**
  * Approved loans past their end date that haven't had a reminder sent today.
@@ -32,13 +33,16 @@ export const overdueLoans = internalQuery({
     }),
   ),
   handler: async (ctx, { today }) => {
-    const loans = await ctx.db
+    const loans = ctx.db
       .query("loans")
-      .withIndex("by_status_and_endDate", (q) => q.eq("status", "approved").lt("endDate", today))
-      .take(MAX_OVERDUE_PER_RUN);
+      .withIndex("by_status_and_endDate", (q) => q.eq("status", "approved").lt("endDate", today));
 
+    // Skip loans already reminded today *before* capping, so a backlog of
+    // reminded loans can't hide the ones still due. Scanning stays bounded.
     const due = [];
-    for (const loan of loans) {
+    let scanned = 0;
+    for await (const loan of loans) {
+      if (due.length >= MAX_OVERDUE_PER_RUN || ++scanned > MAX_OVERDUE_SCANNED) break;
       const idempotencyKey = overdueReminderKey(loan._id, today);
       const already = await ctx.db
         .query("automationEvents")

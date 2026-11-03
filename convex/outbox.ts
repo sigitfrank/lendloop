@@ -1,7 +1,13 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
-import { env, internalAction, internalMutation, internalQuery } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import {
+  env,
+  internalAction,
+  internalMutation,
+  internalQuery,
+  type MutationCtx,
+} from "./_generated/server";
 import { SIGNATURE_HEADER, TIMESTAMP_HEADER, sign } from "./lib/hmac";
 
 // Convex → n8n delivery of loan events, with retries.
@@ -12,6 +18,8 @@ import { SIGNATURE_HEADER, TIMESTAMP_HEADER, sign } from "./lib/hmac";
 
 const MAX_ATTEMPTS = 5;
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000]; // after attempts 1..4
+const DELIVERY_TIMEOUT_MS = 10_000;
+const STUCK_AFTER_MS = 10 * 60_000; // a due attempt that hasn't recorded anything by then
 
 /** Who gets told about each status: the lender hears about new/cancelled requests. */
 function recipientSide(status: Doc<"loans">["status"]): "lender" | "borrower" {
@@ -108,20 +116,21 @@ export const deliver = internalAction({
       return null;
     }
 
-    const body = JSON.stringify(prepared.payload);
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const { pathname, search } = new URL(url);
-    const signature = await sign(secret, {
-      timestamp,
-      method: "POST",
-      path: pathname + search,
-      body,
-    });
-
     let error: string | undefined;
     let statusCode = 0; // stays 0 if n8n can't be reached at all
+    let path = "(invalid N8N_WEBHOOK_URL)";
     const startedAt = Date.now();
     try {
+      const body = JSON.stringify(prepared.payload);
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const { pathname, search } = new URL(url);
+      path = pathname; // no host, no query
+      const signature = await sign(secret, {
+        timestamp,
+        method: "POST",
+        path: pathname + search,
+        body,
+      });
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -130,6 +139,7 @@ export const deliver = internalAction({
           [SIGNATURE_HEADER]: signature,
         },
         body,
+        signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS), // a hung n8n is a failed attempt
       });
       statusCode = response.status;
       if (!response.ok) error = `n8n responded ${response.status}`;
@@ -137,17 +147,43 @@ export const deliver = internalAction({
       error = err instanceof Error ? err.message : "network error";
     }
 
-    await ctx.runMutation(internal.automation.logRequest, {
-      direction: "to_n8n",
-      method: "POST",
-      path: pathname, // no host, no query
-      statusCode,
-      durationMs: Date.now() - startedAt,
-      loanId: prepared.payload.loan.id,
-      detail: error,
-    });
+    try {
+      await ctx.runMutation(internal.automation.logRequest, {
+        direction: "to_n8n",
+        method: "POST",
+        path,
+        statusCode,
+        durationMs: Date.now() - startedAt,
+        loanId: prepared.payload.loan.id,
+        detail: error,
+      });
+    } catch (err) {
+      console.error("automation log write failed", err); // never blocks recording the attempt
+    }
     await ctx.runMutation(internal.outbox.recordAttempt, { outboxId, ok: !error, error });
     return null;
+  },
+});
+
+/**
+ * Safety net (cron): a delivery that never recorded its attempt (e.g. the
+ * action crashed) would stay "pending" forever. Count it as a failed attempt,
+ * which schedules the normal retry or, after MAX_ATTEMPTS, fails visibly.
+ */
+export const sweepStuck = internalMutation({
+  args: {},
+  returns: v.object({ swept: v.number() }),
+  handler: async (ctx) => {
+    const stuck = await ctx.db
+      .query("outbox")
+      .withIndex("by_status_and_nextAttemptAt", (q) =>
+        q.eq("status", "pending").lt("nextAttemptAt", Date.now() - STUCK_AFTER_MS),
+      )
+      .take(50);
+    for (const row of stuck) {
+      await applyAttempt(ctx, row._id, { ok: false, error: "Delivery did not finish" });
+    }
+    return { swept: stuck.length };
   },
 });
 
@@ -160,36 +196,44 @@ export const recordAttempt = internalMutation({
     permanent: v.optional(v.boolean()),
   },
   returns: v.null(),
-  handler: async (ctx, { outboxId, ok, error, permanent }) => {
-    const row = await ctx.db.get("outbox", outboxId);
-    if (!row || row.status !== "pending") return null;
-
-    if (ok) {
-      await ctx.db.patch("outbox", outboxId, { status: "delivered", lastError: undefined });
-      return null;
-    }
-
-    const attempts = row.attempts + 1;
-    if (!permanent && attempts < MAX_ATTEMPTS) {
-      const delay = RETRY_DELAYS_MS[attempts - 1];
-      await ctx.db.patch("outbox", outboxId, {
-        attempts,
-        lastError: error,
-        nextAttemptAt: Date.now() + delay,
-      });
-      await ctx.scheduler.runAfter(delay, internal.outbox.deliver, { outboxId });
-      return null;
-    }
-
-    // Out of retries: mark failed and make it visible on the loan and in admin.
-    await ctx.db.patch("outbox", outboxId, { status: "failed", attempts, lastError: error });
-    await ctx.runMutation(internal.automation.recordEvent, {
-      idempotencyKey: row.idempotencyKey,
-      type: "request_notification",
-      status: "failed",
-      loanId: row.loanId,
-      detail: `Couldn't reach n8n after ${attempts} attempt${attempts === 1 ? "" : "s"}: ${error ?? "unknown error"}`,
-    });
+  handler: async (ctx, { outboxId, ...attempt }) => {
+    await applyAttempt(ctx, outboxId, attempt);
     return null;
   },
 });
+
+async function applyAttempt(
+  ctx: MutationCtx,
+  outboxId: Id<"outbox">,
+  { ok, error, permanent }: { ok: boolean; error?: string; permanent?: boolean },
+) {
+  const row = await ctx.db.get("outbox", outboxId);
+  if (!row || row.status !== "pending") return;
+
+  if (ok) {
+    await ctx.db.patch("outbox", outboxId, { status: "delivered", lastError: undefined });
+    return;
+  }
+
+  const attempts = row.attempts + 1;
+  if (!permanent && attempts < MAX_ATTEMPTS) {
+    const delay = RETRY_DELAYS_MS[attempts - 1];
+    await ctx.db.patch("outbox", outboxId, {
+      attempts,
+      lastError: error,
+      nextAttemptAt: Date.now() + delay,
+    });
+    await ctx.scheduler.runAfter(delay, internal.outbox.deliver, { outboxId });
+    return;
+  }
+
+  // Out of retries: mark failed and make it visible on the loan and in admin.
+  await ctx.db.patch("outbox", outboxId, { status: "failed", attempts, lastError: error });
+  await ctx.runMutation(internal.automation.recordEvent, {
+    idempotencyKey: row.idempotencyKey,
+    type: "request_notification",
+    status: "failed",
+    loanId: row.loanId,
+    detail: `Couldn't reach n8n after ${attempts} attempt${attempts === 1 ? "" : "s"}: ${error ?? "unknown error"}`,
+  });
+}

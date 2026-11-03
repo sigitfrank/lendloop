@@ -4,7 +4,8 @@ import type { QueryCtx } from "../_generated/server";
 
 // Approved loans are the only ones that block a tool. Once returned they leave
 // the "approved" index range, so this set stays small (current + upcoming).
-const MAX_APPROVED_PER_TOOL = 50;
+// Shared with loans.ts so availability and approval checks read the same set.
+export const MAX_LOANS_PER_TOOL_STATUS = 100;
 
 export const availabilityValidator = v.object({
   state: v.union(v.literal("available"), v.literal("on_loan"), v.literal("overdue")),
@@ -23,7 +24,7 @@ export async function getAvailability(
   const approved = await ctx.db
     .query("loans")
     .withIndex("by_toolId_and_status", (q) => q.eq("toolId", toolId).eq("status", "approved"))
-    .take(MAX_APPROVED_PER_TOOL);
+    .take(MAX_LOANS_PER_TOOL_STATUS);
 
   const bookings = approved
     .map(({ startDate, endDate }) => ({ startDate, endDate }))

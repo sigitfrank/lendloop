@@ -104,8 +104,7 @@ export default defineSchema({
     idempotencyKey: v.string(),
   })
     .index("by_idempotencyKey", ["idempotencyKey"])
-    .index("by_loanId", ["loanId"])
-    .index("by_status", ["status"]),
+    .index("by_loanId", ["loanId"]),
 
   // Convex → n8n deliveries, written in the same transaction as the loan change.
   // The row's _id is the event id; the payload is built at delivery time.

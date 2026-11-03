@@ -9,7 +9,7 @@ services:
   n8n:
     image: n8nio/n8n:3.1.0 # pinned so everyone runs the same version
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678" # this machine only; the tunnel reaches it locally
     # Non-secret settings only (LENDLOOP_CONVEX_URL, LENDLOOP_APP_URL). The HMAC
     # secret lives in an encrypted n8n Crypto credential, not in this environment.
     env_file: n8n.env
@@ -30,11 +30,11 @@ services:
       - mailpit
 
   mailpit:
-    # Same image + tag commonly already pulled, so it isn't downloaded twice.
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.31.2 # pinned like n8n
     ports:
-      - "8025:8025" # inbox UI
-      - "1025:1025" # SMTP; n8n sends to mailpit:1025
+      # Bound to this machine only: the inbox shows recipient emails.
+      - "127.0.0.1:8025:8025" # inbox UI
+      - "127.0.0.1:1025:1025" # SMTP; n8n sends to mailpit:1025 inside the network
 
 volumes:
   n8n_data:

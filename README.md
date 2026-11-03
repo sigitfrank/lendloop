@@ -81,7 +81,7 @@ separate queue: the Convex **outbox + scheduler** is the queue.
 
 ### Prerequisites
 
-- Node.js 20.9+ and **pnpm**
+- Node.js **22.12+** (Convex 1.49 and Vitest 5 require it) and **pnpm**
 - **Docker Desktop** (runs n8n + Mailpit, about 1.3 GB of images on first run)
 - **cloudflared** for the public tunnel: `winget install Cloudflare.cloudflared` or
   `brew install cloudflared` (no Cloudflare account needed)
@@ -108,8 +108,8 @@ pnpm install
    }
    ```
    Convex reads `name` and `email` from here (the email is only used to notify the user themselves).
-4. **API keys:** copy the publishable and secret key into `.env.local` (see
-   [`.env.example`](.env.example)):
+4. **API keys:** copy [`.env.example`](.env.example) to `.env.local`, then fill in the
+   publishable and secret key (the other values are written by the commands below):
    ```
    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
    CLERK_SECRET_KEY=sk_test_...
@@ -123,7 +123,8 @@ pnpm convex dev
 
 Sign in, create a project (cloud dev deployment). This writes `CONVEX_DEPLOYMENT`,
 `NEXT_PUBLIC_CONVEX_URL` and `NEXT_PUBLIC_CONVEX_SITE_URL` to `.env.local`. The first push stops
-on the missing Clerk issuer; set it, then run `pnpm convex dev` again and keep it running:
+because two Convex env vars aren't set yet (the Clerk issuer and the MCP public key). Run both
+commands below, then run `pnpm convex dev` again and keep it running:
 
 ```bash
 pnpm convex env set CLERK_JWT_ISSUER_DOMAIN https://<your-instance>.clerk.accounts.dev
@@ -149,6 +150,9 @@ Sign up, open **Browse tools**: your user row is created on first sign-in with r
 pnpm convex run users:setRole '{"email":"you@example.com","role":"admin"}'
 ```
 
+On Windows, run that line in Git Bash (PowerShell and cmd mangle the JSON quotes), or use the
+Convex dashboard: **Functions → users:setRole → Run** with the same arguments.
+
 Use a second account (e.g. a private window) to borrow from the first.
 
 ### 5. n8n + Mailpit
@@ -159,6 +163,12 @@ provides one.
 ```bash
 pnpm n8n:setup                 # add --app-url http://localhost:3001 if the app runs elsewhere
 docker compose up -d           # n8n http://localhost:5678 · Mailpit http://localhost:8025
+```
+
+Open n8n (http://localhost:5678) and **create the local owner account first**: the tunnel below
+makes n8n reachable from the internet, so don't start it while n8n is still unclaimed. Then:
+
+```bash
 pnpm tunnel                    # own terminal, keep it running
 ```
 
@@ -168,7 +178,7 @@ pnpm tunnel                    # own terminal, keep it running
 - `pnpm tunnel` starts the tunnel and points Convex's `N8N_WEBHOOK_URL` at it. The quick-tunnel
   address changes on every start, so run it again after a restart.
 
-In n8n (http://localhost:5678), create the local owner account, then:
+In n8n:
 
 1. **Credentials** (**＋ → Credential**):
    - **Crypto**, named exactly `LendLoop HMAC secret`. **Hmac Secret** = the contents of
@@ -214,10 +224,10 @@ connector).
 ### 7. Tests
 
 ```bash
-pnpm test        # 37 tests, ~1 s
+pnpm test        # 42 tests, ~1 s
 pnpm typecheck   # generates Next.js route types, then tsc
 pnpm lint
-pnpm format       # Prettier (also runs on every commit via husky + lint-staged)
+pnpm format:check # Prettier (pnpm format fixes; also runs on every commit via husky + lint-staged)
 ```
 
 ---
@@ -256,7 +266,7 @@ Convex (cloud)
    ├─ queries / mutations   every one: authenticate → authorise → validate → act
    ├─ outbox + scheduler    loan change + event in one transaction; delivery with backoff
    ├─ HTTP actions /n8n/*   HMAC-verified; idempotent write-backs; every call logged
-   └─ crons                 automation log retention (30 days)
+   └─ crons                 log retention, stale-request expiry, stuck-delivery sweep
    ▲                 │
    │ signed GET/POST │ signed POST (loan event)
    │                 ▼
@@ -327,7 +337,11 @@ existence isn't revealed.
   - Binding method + path means a signature for one endpoint can't be replayed on another.
   - **5-minute replay window** on the timestamp.
   - **Constant-time comparison:** `crypto.subtle.verify` in Convex; an XOR loop in n8n.
-  - Bad or old signatures get **401 before any database access**.
+  - Bad or old signatures get **401 before any database access** (not even a log row).
+- **Rate limits** (Convex rate-limiter component, per user): borrow requests 20/hour (each one
+  emails a lender, so a request/cancel loop can't flood an inbox) and MCP tool calls 60/minute.
+- **Bounded reads.** Client page sizes are capped at 50 on the server; per-tool loan checks and
+  feeds read bounded, index-backed ranges.
 - **Secrets.** Only in Convex env and an **encrypted n8n Crypto credential**. Not in code, not in
   the exported workflow JSON (checked against the real value), and **not in n8n's container
   environment**, so no workflow can read it through `$env`. Scripts set Convex env by calling the
@@ -374,6 +388,11 @@ after 30 days by a cron.
 
 - **n8n side:** every HTTP node retries 3× (3 s apart); email nodes route failures to a
   "write-back: failed" branch; **WF3** (error workflow) reports any failed execution to Convex.
+  A failed email is recorded as **failed** on the loan and in the log; it isn't re-sent
+  automatically (the Convex → n8n hop retries, the email step inside n8n doesn't).
+- **Safety nets.** Delivery has a 10 s timeout; a cron re-queues any delivery that never
+  recorded an attempt, so nothing stays "pending" silently. Unsigned calls get 401 and are not
+  logged (no database write), so the log can't be flooded from outside.
 - **Visibility.** Each loan's timeline shows sent / failed / retrying. **Admin → Automation log**
   records every HTTP call in both directions (status code, duration, message), filterable by
   status (Failed, n8n workflow errors, 200, 202, 400, 401, 404, 500, 503, network error) and
@@ -428,7 +447,7 @@ Removing listings, Trusted Lender and roles stay in the UI on purpose.
 
 ## Testing
 
-`pnpm test` runs **37 tests** with [convex-test](https://docs.convex.dev/testing/convex-test),
+`pnpm test` runs **42 tests** with [convex-test](https://docs.convex.dev/testing/convex-test),
 executing the real functions as different users (Alice lends, Bob borrows, Carol is a stranger,
 plus an admin).
 
@@ -442,7 +461,9 @@ plus an admin).
   body, other path, wrong secret, stale timestamp rejected); 401 for unsigned calls; overdue feed
   data minimisation; **idempotent replay** of write-backs; outbox delivery is signed and minimal;
   **5 attempts with backoff then a visible failure**; activity hides error details from loan
-  parties; automation log status codes, admin-only access, search and **30-day pruning**.
+  parties; automation log status codes, admin-only access, search and **30-day pruning**;
+  delivery timeout and **stuck-delivery sweep**; write-back keys bound to their loan; stale
+  requests expire; unknown log filters rejected; **borrow requests rate limited**.
 - **MCP** ([`convex/mcp.test.ts`](convex/mcp.test.ts)): a Claude token acts as the same user as
   the browser; unknown users refused; Claude can't create users; can't act on someone else's loan;
   guardrails only accept MCP tokens; audit rows are per user; per-user rate limit.
@@ -468,6 +489,8 @@ plus an admin).
   at scale, `@convex-dev/aggregate` counters.
 - **"Today" is UTC** on both sides (Convex dates, n8n schedule). Per-user timezones are a
   production follow-up.
+- **Unanswered requests expire.** A request still pending on its start date can't be approved
+  any more, so a daily cron closes it as declined (no email: the lender didn't decline it).
 - **Soft deletes** for all listing removals keep loan history intact; admin removal also declines
   pending requests (and notifies borrowers).
 - **Mailpit, not a real provider**, so reviewers see every email locally with zero setup. Swapping
@@ -494,7 +517,7 @@ convex/
   outbox.ts              delivery to n8n with retries
   http.ts                signed /n8n/* endpoints
   automation.ts          idempotent write-backs, overdue feed, HTTP log
-  crons.ts               log retention
+  crons.ts               retention, stale requests, outbox sweep
   mcp.ts                 MCP rate limit + audit log
   *.test.ts              RBAC + integration tests
 n8n/                     exported workflows (WF1–WF3), no secrets

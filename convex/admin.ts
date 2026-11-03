@@ -1,8 +1,9 @@
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { getActiveTool, requireAdmin } from "./lib/auth";
+import { boundedPage } from "./lib/pagination";
 import { loanListArgs, loansQuery, loanViewValidator, toLoanView } from "./lib/loanViews";
 import { enqueueLoanNotification } from "./lib/outbox";
 import { cleanSearch } from "./lib/search";
@@ -24,7 +25,7 @@ export const loans = query({
       sort: sort ?? "newest",
       search: cleanSearch(search, SEARCH_MAX),
       today,
-    }).paginate(paginationOpts);
+    }).paginate(boundedPage(paginationOpts));
     const page = await Promise.all(
       result.page.map((loan) => toLoanView(ctx, loan, today, { includeDetail: true })),
     );
@@ -127,7 +128,7 @@ export const users = query({
           ? users.withIndex("by_role", (q) => q.eq("role", "admin")).order(order)
           : users.order(order);
 
-    const result = await query.paginate(paginationOpts);
+    const result = await query.paginate(boundedPage(paginationOpts));
     const page = await Promise.all(
       result.page.map(async (user) => ({
         _id: user._id,
@@ -190,6 +191,9 @@ export const automationLog = query({
     const log = ctx.db.query("automationLog");
     const code = /^\d{1,3}$/.test(filter) ? Number(filter) : undefined;
     const text = cleanSearch(search, SEARCH_MAX);
+    if (code === undefined && !["all", "failed", "workflow-errors"].includes(filter)) {
+      throw new ConvexError("Unknown filter.");
+    }
 
     // With a search, the same filters apply as search-index filters
     // (results are relevance-ordered); without one, indexes give newest first.
@@ -209,7 +213,7 @@ export const automationLog = query({
               ? log.withIndex("by_statusCode", (q) => q.eq("statusCode", code))
               : log
         ).order("desc");
-    const result = await query.paginate(paginationOpts);
+    const result = await query.paginate(boundedPage(paginationOpts));
     const page = await Promise.all(
       result.page.map(async (row) => {
         const loan = row.loanId ? await ctx.db.get("loans", row.loanId) : null;

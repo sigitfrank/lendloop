@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import rateLimiter from "@convex-dev/rate-limiter/test";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "./_generated/api";
@@ -20,6 +21,7 @@ const NOT_FOUND = /doesn't exist/i;
 
 async function setup() {
   const t = convexTest(schema, modules);
+  rateLimiter.register(t);
   const people = ["alice", "bob", "carol", "admin"] as const;
   await t.run(async (ctx) => {
     for (const who of people) {

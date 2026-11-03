@@ -9,6 +9,17 @@ import { useStoreUser } from "@/hooks/use-store-user";
 export function UserReady({ children }: { children: React.ReactNode }) {
   const status = useStoreUser();
 
+  if (status === "error") {
+    return (
+      <div className="space-y-3 text-sm" role="alert">
+        <p>We couldn&apos;t load your account. Check your connection and try again.</p>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
   if (status === "unauthenticated") {
     return (
       <div className="space-y-3 text-sm" role="alert">
